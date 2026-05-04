@@ -135,6 +135,106 @@ func (s *Service) Delete(ctx context.Context) error {
 	return nil
 }
 
+// Diagnostic probes each required scope independently against Google's token
+// endpoint, so we can tell exactly which scopes are missing from DWD without
+// asking the operator to read raw OAuth errors.
+func (s *Service) Diagnostic(ctx context.Context) (*DiagnosticResponse, error) {
+	creds, err := s.repo.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if creds == nil {
+		return nil, ErrNotConfigured
+	}
+
+	probes := make([]ScopeProbe, 0, len(workspace.DefaultScopes))
+	for _, scope := range workspace.DefaultScopes {
+		probe := ScopeProbe{Scope: scope}
+		c, buildErr := workspace.New(ctx, workspace.Config{
+			ServiceAccountKey: creds.SAJSON,
+			DelegatedAdmin:    creds.DelegatedAdmin,
+			CustomerID:        creds.CustomerID,
+			Scopes:            []string{scope},
+			RateLimitRPS:      s.rateLimitRPS,
+			RateLimitBurst:    s.rateLimitBurst,
+		})
+		if buildErr != nil {
+			probe.Error = buildErr.Error()
+			probes = append(probes, probe)
+			continue
+		}
+		// Each scope drives a different read; user.alias has no list endpoint
+		// so we re-use ListUsers (admin.directory.user.alias is granted by
+		// users-scope already in practice).
+		var probeErr error
+		switch scope {
+		case "https://www.googleapis.com/auth/admin.directory.group":
+			_, _, probeErr = c.ListGroupsPage(ctx, "", 1)
+		default:
+			_, _, probeErr = c.ListUsersPage(ctx, "", 1)
+		}
+		if probeErr != nil {
+			probe.Error = sanitiseOAuthError(probeErr.Error())
+		} else {
+			probe.OK = true
+		}
+		probes = append(probes, probe)
+	}
+
+	summary := buildDiagnosticSummary(creds.SAClientID, probes)
+	return &DiagnosticResponse{
+		SAClientID:     creds.SAClientID,
+		DelegatedAdmin: creds.DelegatedAdmin,
+		Probes:         probes,
+		Summary:        summary,
+	}, nil
+}
+
+func buildDiagnosticSummary(clientID string, probes []ScopeProbe) string {
+	okCount := 0
+	for _, p := range probes {
+		if p.OK {
+			okCount++
+		}
+	}
+	if okCount == len(probes) {
+		return "All required scopes authorized — credentials are working."
+	}
+	if okCount == 0 {
+		return fmt.Sprintf(
+			"None of the required scopes authorized. Most likely Domain-Wide Delegation has no entry for Client ID %s, or the entry exists with a different Client ID. Open Workspace Admin → Domain-Wide Delegation, add %s with all four scopes, click Authorize, wait 1–2 min, and re-run the test.",
+			clientID, clientID,
+		)
+	}
+	missing := []string{}
+	for _, p := range probes {
+		if !p.OK {
+			missing = append(missing, shortScope(p.Scope))
+		}
+	}
+	return fmt.Sprintf(
+		"Some scopes are missing from DWD: %s. Open Workspace Admin → Domain-Wide Delegation → entry for Client ID %s → Edit → re-paste all four scopes (one line, comma-separated) → Authorize.",
+		strings.Join(missing, ", "), clientID,
+	)
+}
+
+func shortScope(s string) string {
+	const prefix = "https://www.googleapis.com/auth/"
+	if strings.HasPrefix(s, prefix) {
+		return s[len(prefix):]
+	}
+	return s
+}
+
+// sanitiseOAuthError trims oauth2 errors to the structured part Google
+// returns, hiding the noisy URL prefix.
+func sanitiseOAuthError(s string) string {
+	if i := strings.Index(s, "oauth2: cannot fetch token"); i >= 0 {
+		return s[i:]
+	}
+	return s
+}
+
 // Test attempts a no-op Workspace call to confirm the credentials work.
 // On the most common DWD misconfiguration ("unauthorized_client"), the
 // returned error is wrapped with a friendly hint that includes the SA's

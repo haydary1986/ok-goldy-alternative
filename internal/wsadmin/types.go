@@ -35,3 +35,20 @@ type UploadRequest struct {
 	DelegatedAdmin string
 	CustomerID     string
 }
+
+// ScopeProbe is the result of testing one OAuth scope independently against
+// Google's token endpoint, so an operator can see which scopes are missing
+// from Domain-Wide Delegation.
+type ScopeProbe struct {
+	Scope string `json:"scope"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+// DiagnosticResponse is the body returned by POST /api/v1/admin/workspace/diagnostic.
+type DiagnosticResponse struct {
+	SAClientID     string       `json:"sa_client_id,omitempty"`
+	DelegatedAdmin string       `json:"delegated_admin,omitempty"`
+	Probes         []ScopeProbe `json:"probes"`
+	Summary        string       `json:"summary"`
+}

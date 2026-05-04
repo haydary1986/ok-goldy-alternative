@@ -31,6 +31,7 @@ func (h *Handler) Routes() func(chi.Router) {
 		r.Post("/workspace/credentials", h.upload)
 		r.Delete("/workspace/credentials", h.delete)
 		r.Post("/workspace/test", h.test)
+		r.Post("/workspace/diagnostic", h.diagnostic)
 	}
 }
 
@@ -99,6 +100,19 @@ func (h *Handler) test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.WriteData(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (h *Handler) diagnostic(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.Diagnostic(r.Context())
+	if err != nil {
+		if errors.Is(err, ErrNotConfigured) {
+			api.WriteError(w, http.StatusServiceUnavailable, "not_configured", err.Error())
+			return
+		}
+		api.WriteError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	api.WriteData(w, http.StatusOK, out)
 }
 
 func (h *Handler) writeErr(w http.ResponseWriter, err error) {

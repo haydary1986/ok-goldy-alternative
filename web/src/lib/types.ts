@@ -53,3 +53,29 @@ export interface WorkspaceCredentials {
   project_id?: string;
   updated_at: string;
 }
+
+export interface ScopeProbe {
+  scope: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface WorkspaceDiagnostic {
+  sa_client_id?: string;
+  delegated_admin?: string;
+  probes: ScopeProbe[];
+  summary: string;
+}
+
+export interface ScopeProbe {
+  scope: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface DiagnosticResponse {
+  sa_client_id?: string;
+  delegated_admin?: string;
+  probes: ScopeProbe[];
+  summary: string;
+}

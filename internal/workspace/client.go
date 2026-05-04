@@ -27,11 +27,15 @@ var DefaultScopes = []string{
 // Either ServiceAccountKey (raw JSON bytes, preferred — used when credentials
 // come from the database via the admin UI) or ServiceAccountKeyFile (path on
 // disk, used when credentials come from environment variables) must be set.
+//
+// Scopes overrides DefaultScopes when non-empty; that's used by diagnostic
+// flows that probe individual scopes to find a missing DWD authorization.
 type Config struct {
 	ServiceAccountKey     []byte
 	ServiceAccountKeyFile string
 	DelegatedAdmin        string
 	CustomerID            string
+	Scopes                []string
 	RateLimitRPS          int
 	RateLimitBurst        int
 }
@@ -62,7 +66,11 @@ func New(ctx context.Context, c Config) (*Client, error) {
 		keyBytes = fileBytes
 	}
 
-	jwtCfg, err := google.JWTConfigFromJSON(keyBytes, DefaultScopes...)
+	scopes := c.Scopes
+	if len(scopes) == 0 {
+		scopes = DefaultScopes
+	}
+	jwtCfg, err := google.JWTConfigFromJSON(keyBytes, scopes...)
 	if err != nil {
 		return nil, fmt.Errorf("workspace: parse sa key: %w", err)
 	}

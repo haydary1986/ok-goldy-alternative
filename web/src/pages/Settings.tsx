@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, apiUpload } from '../lib/api';
-import type { WorkspaceStatus } from '../lib/types';
+import type { WorkspaceStatus, WorkspaceDiagnostic } from '../lib/types';
 
 const ADMIN_PATH = '/admin/workspace';
 
@@ -40,6 +40,16 @@ export default function Settings() {
   const test = useMutation({
     mutationFn: () => api<{ ok: boolean }>(`${ADMIN_PATH}/test`, { method: 'POST' }),
     onSuccess: () => setFeedback({ kind: 'ok', msg: 'Connection test passed — Workspace API is reachable.' }),
+    onError: (err: Error) => setFeedback({ kind: 'err', msg: err.message }),
+  });
+
+  const [diag, setDiag] = useState<WorkspaceDiagnostic | null>(null);
+  const diagnostic = useMutation({
+    mutationFn: () => api<WorkspaceDiagnostic>(`${ADMIN_PATH}/diagnostic`, { method: 'POST' }),
+    onSuccess: (data) => {
+      setDiag(data);
+      setFeedback(null);
+    },
     onError: (err: Error) => setFeedback({ kind: 'err', msg: err.message }),
   });
 
@@ -130,13 +140,20 @@ export default function Settings() {
                     </div>
                   </div>
                 )}
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex gap-2 flex-wrap">
                   <button
                     onClick={() => test.mutate()}
                     disabled={test.isPending}
                     className="px-3 py-1.5 text-sm bg-white border border-green-400 text-green-800 rounded hover:bg-green-100 disabled:opacity-50"
                   >
                     {test.isPending ? 'Testing…' : 'Test connection'}
+                  </button>
+                  <button
+                    onClick={() => diagnostic.mutate()}
+                    disabled={diagnostic.isPending}
+                    className="px-3 py-1.5 text-sm bg-white border border-blue-400 text-blue-800 rounded hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    {diagnostic.isPending ? 'Probing scopes…' : 'Run scope diagnostic'}
                   </button>
                   <button
                     onClick={() => {
@@ -282,6 +299,42 @@ export default function Settings() {
           {upload.isPending ? 'Uploading…' : 'Save credentials'}
         </button>
       </section>
+
+      {/* Diagnostic results */}
+      {diag && (
+        <section className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+          <h2 className="font-medium text-gray-900">Scope-by-scope diagnostic</h2>
+          <p className="text-sm text-gray-600">{diag.summary}</p>
+          <table className="w-full text-sm">
+            <thead className="text-left text-gray-500 text-xs uppercase">
+              <tr>
+                <th className="pb-2">Scope</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2">Detail</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {diag.probes.map((p) => (
+                <tr key={p.scope}>
+                  <td className="py-1.5 font-mono text-xs">
+                    {p.scope.replace('https://www.googleapis.com/auth/', '')}
+                  </td>
+                  <td className="py-1.5">
+                    {p.ok ? (
+                      <span className="text-green-700 font-medium">✅ OK</span>
+                    ) : (
+                      <span className="text-red-700 font-medium">❌ Fail</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-xs text-gray-600 break-all">
+                    {p.ok ? '—' : p.error}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {feedback && (
         <div
