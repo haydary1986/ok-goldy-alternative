@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/oauth2/google"
+
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 )
 
@@ -147,34 +149,24 @@ func (s *Service) Diagnostic(ctx context.Context) (*DiagnosticResponse, error) {
 		return nil, ErrNotConfigured
 	}
 
+	// We test the **token exchange** itself with each scope in isolation,
+	// rather than calling an API. That's exactly what fails when DWD is
+	// misconfigured (Google returns "unauthorized_client" at the token
+	// endpoint), and it avoids false negatives from probing scopes against
+	// APIs that require a different scope (e.g. you can't validate
+	// admin.directory.group.member by hitting Users.List).
 	probes := make([]ScopeProbe, 0, len(workspace.DefaultScopes))
 	for _, scope := range workspace.DefaultScopes {
 		probe := ScopeProbe{Scope: scope}
-		c, buildErr := workspace.New(ctx, workspace.Config{
-			ServiceAccountKey: creds.SAJSON,
-			DelegatedAdmin:    creds.DelegatedAdmin,
-			CustomerID:        creds.CustomerID,
-			Scopes:            []string{scope},
-			RateLimitRPS:      s.rateLimitRPS,
-			RateLimitBurst:    s.rateLimitBurst,
-		})
-		if buildErr != nil {
-			probe.Error = buildErr.Error()
+		jwtCfg, err := google.JWTConfigFromJSON(creds.SAJSON, scope)
+		if err != nil {
+			probe.Error = err.Error()
 			probes = append(probes, probe)
 			continue
 		}
-		// Each scope drives a different read; user.alias has no list endpoint
-		// so we re-use ListUsers (admin.directory.user.alias is granted by
-		// users-scope already in practice).
-		var probeErr error
-		switch scope {
-		case "https://www.googleapis.com/auth/admin.directory.group":
-			_, _, probeErr = c.ListGroupsPage(ctx, "", 1)
-		default:
-			_, _, probeErr = c.ListUsersPage(ctx, "", 1)
-		}
-		if probeErr != nil {
-			probe.Error = sanitiseOAuthError(probeErr.Error())
+		jwtCfg.Subject = creds.DelegatedAdmin
+		if _, tokErr := jwtCfg.TokenSource(ctx).Token(); tokErr != nil {
+			probe.Error = sanitiseOAuthError(tokErr.Error())
 		} else {
 			probe.OK = true
 		}
