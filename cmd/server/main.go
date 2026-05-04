@@ -14,6 +14,7 @@ import (
 	"github.com/haydary1986/ok-goldy-alternative/internal/audit"
 	"github.com/haydary1986/ok-goldy-alternative/internal/config"
 	"github.com/haydary1986/ok-goldy-alternative/internal/db"
+	"github.com/haydary1986/ok-goldy-alternative/internal/groups"
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
@@ -45,15 +46,20 @@ func main() {
 	wsClient := buildWorkspaceClient(ctx, cfg, logger)
 
 	auditSvc := audit.New(pool)
+
 	usersRepo := users.NewRepository(pool)
 	usersSvc := users.NewService(wsClient, usersRepo)
 	usersHandler := users.NewHandler(usersSvc, auditSvc)
+
+	groupsSvc := groups.NewService(wsClient)
+	groupsHandler := groups.NewHandler(groupsSvc, auditSvc)
 
 	router := api.NewRouter(api.Deps{
 		Logger:       logger,
 		DB:           pool,
 		Config:       cfg,
 		UsersRoutes:  usersHandler.Routes(),
+		GroupsRoutes: groupsHandler.Routes(),
 	})
 
 	srv := &http.Server{

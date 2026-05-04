@@ -37,11 +37,11 @@ func (h *Handler) Routes() func(chi.Router) {
 		r.Post("/bulk/import", h.notImplemented)
 		r.Get("/bulk/export", h.notImplemented)
 
-		// Aliases sub-resource — wired later.
+		// Aliases sub-resource (handlers live in aliases.go).
 		r.Route("/{id}/aliases", func(r chi.Router) {
-			r.Get("/", h.notImplemented)
-			r.Post("/", h.notImplemented)
-			r.Delete("/{alias}", h.notImplemented)
+			r.Get("/", h.listAliases)
+			r.Post("/", h.addAlias)
+			r.Delete("/{alias}", h.deleteAlias)
 		})
 	}
 }
