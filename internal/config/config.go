@@ -84,6 +84,8 @@ func getenvInt(key string, def int) int {
 	return def
 }
 
+// splitCSV parses a comma-separated string into a slice of trimmed,
+// non-empty entries. Returns nil if the result would be empty.
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
@@ -94,6 +96,9 @@ func splitCSV(s string) []string {
 		if t := strings.TrimSpace(p); t != "" {
 			out = append(out, t)
 		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
