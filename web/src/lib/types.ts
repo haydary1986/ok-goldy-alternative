@@ -13,6 +13,25 @@ export interface UsersListResponse {
   next_page_token?: string;
 }
 
+export interface CreateUserRequest {
+  primary_email: string;
+  given_name: string;
+  family_name: string;
+  password: string;
+  org_unit_path?: string;
+}
+
+export interface UpdateUserRequest {
+  given_name?: string;
+  family_name?: string;
+  org_unit_path?: string;
+  suspended?: boolean;
+}
+
+export interface Alias {
+  alias: string;
+}
+
 export interface Group {
   id: string;
   email: string;
@@ -23,6 +42,22 @@ export interface Group {
 
 export interface GroupsListResponse {
   groups: Group[];
+  next_page_token?: string;
+}
+
+export interface CreateGroupRequest {
+  email: string;
+  name?: string;
+  description?: string;
+}
+
+export interface AddMemberRequest {
+  email: string;
+  role?: 'OWNER' | 'MANAGER' | 'MEMBER';
+}
+
+export interface MembersListResponse {
+  members: Member[];
   next_page_token?: string;
 }
 

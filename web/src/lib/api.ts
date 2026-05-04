@@ -63,3 +63,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   return api<T>(path, { method: 'POST', body: form });
 }
+
+// Convenience wrappers — unconventional shape, but each takes the bare
+// resource path so callers don't repeat the /api/v1 prefix or the JSON
+// boilerplate.
+export const apiPost = <T,>(path: string, body: unknown) =>
+  api<T>(path, { method: 'POST', body: JSON.stringify(body) });
+
+export const apiPatch = <T,>(path: string, body: unknown) =>
+  api<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const apiDelete = <T,>(path: string) =>
+  api<T>(path, { method: 'DELETE' });
