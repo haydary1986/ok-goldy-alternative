@@ -1,0 +1,40 @@
+# Binaries / build output
+/bin/
+/dist/
+/tmp/
+*.exe
+*.test
+*.out
+
+# Go vendor
+/vendor/
+
+# Env / secrets
+.env
+.env.local
+*.local
+/secrets/
+service-account.json
+*.pem
+*.key
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+
+# Frontend
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Local docker volumes
+docker-data/
