@@ -6,7 +6,7 @@ DOCKER   := docker
 COMPOSE  := docker compose
 MIGRATE  := $(GO) run ./cmd/migrate
 
-.PHONY: help deps tidy build run run-worker test lint fmt vet clean docker-build docker-up docker-down migrate-up migrate-down migrate-status
+.PHONY: help deps tidy build run run-worker test lint fmt vet clean docker-build docker-up docker-down migrate-up migrate-down migrate-status web-install web-dev web-build web-typecheck
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -60,3 +60,17 @@ migrate-down: ## Roll back the most recent migration
 
 migrate-status: ## Show migration status
 	$(MIGRATE) status
+
+# --- Web frontend ---
+
+web-install: ## Install frontend dependencies
+	cd web && npm install
+
+web-dev: ## Run the SPA dev server (Vite, port 5173, proxies /api -> :8080)
+	cd web && npm run dev
+
+web-build: ## Build the SPA for production (web/dist)
+	cd web && npm run build
+
+web-typecheck: ## Type-check the frontend without emitting
+	cd web && npm run typecheck

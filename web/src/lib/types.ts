@@ -1,0 +1,34 @@
+export interface User {
+  id: string;
+  primary_email: string;
+  given_name?: string;
+  family_name?: string;
+  org_unit_path?: string;
+  suspended: boolean;
+  is_admin: boolean;
+}
+
+export interface UsersListResponse {
+  users: User[];
+  next_page_token?: string;
+}
+
+export interface Group {
+  id: string;
+  email: string;
+  name?: string;
+  description?: string;
+  direct_members_count?: number;
+}
+
+export interface GroupsListResponse {
+  groups: Group[];
+  next_page_token?: string;
+}
+
+export interface Member {
+  id?: string;
+  email: string;
+  role?: 'OWNER' | 'MANAGER' | 'MEMBER';
+  type?: 'USER' | 'GROUP' | 'EXTERNAL';
+}

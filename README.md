@@ -79,6 +79,13 @@ make docker-up
 curl http://localhost:8080/healthz
 ```
 
+### 2b. Run the Web UI in dev
+
+```bash
+make web-install   # one-time
+make web-dev       # http://localhost:5173 (proxies /api to the Go server on :8080)
+```
+
 ### 3. Project layout
 
 ```
@@ -132,15 +139,18 @@ ok-goldy-alternative/
 ## Roadmap
 
 - [x] Project scaffold + Docker + Coolify-ready compose
-- [ ] Users domain (CRUD + bulk + CSV)
-- [ ] Groups domain
-- [ ] Members domain
-- [ ] Aliases domain
-- [ ] Async job queue with retries
-- [ ] Audit log
-- [ ] React + TS web UI (shadcn/ui)
+- [x] Users domain (live CRUD; bulk + CSV pending)
+- [x] Groups domain
+- [x] Members domain
+- [x] Aliases domain
+- [x] Audit log (writes — read API pending)
+- [x] React + TS Web UI scaffold (Vite + Tailwind + TanStack Query)
+- [ ] Bulk operations + CSV import / export
+- [ ] Audit log read API + UI
+- [ ] Async job handlers (currently stubs)
 - [ ] OIDC login (Google) for app admins
 - [ ] OU / sub-org filtering
+- [ ] go:embed the SPA build into the Go binary (single container)
 
 ## Acknowledgements
 
