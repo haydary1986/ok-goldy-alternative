@@ -101,6 +101,35 @@ export default function Settings() {
                     <div><dt className="inline font-medium">Updated: </dt><dd className="inline">{new Date(status.data.updated_at).toLocaleString()}</dd></div>
                   )}
                 </dl>
+
+                {status.data.sa_client_id && (
+                  <div className="mt-3 rounded border border-blue-300 bg-blue-50 p-3">
+                    <div className="text-sm font-medium text-blue-900">Client ID for Domain-Wide Delegation</div>
+                    <p className="text-xs text-blue-800 mt-0.5">
+                      Paste this exact value into Workspace Admin → Domain-Wide Delegation → Client ID, then add the four
+                      OAuth scopes below and click <strong>Authorize</strong>.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <code className="flex-1 px-2 py-1 bg-white border border-blue-200 rounded font-mono text-sm select-all">
+                        {status.data.sa_client_id}
+                      </code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(status.data!.sa_client_id!)}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Copy
+                      </button>
+                      <a
+                        href="https://admin.google.com/ac/owl/domainwidedelegation"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-1 text-xs bg-white border border-blue-300 text-blue-700 rounded hover:bg-blue-50"
+                      >
+                        Open DWD ↗
+                      </a>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => test.mutate()}
@@ -262,7 +291,16 @@ export default function Settings() {
               : 'border-red-300 bg-red-50 text-red-800'
           }`}
         >
-          {feedback.msg}
+          <div className="whitespace-pre-wrap break-words">{feedback.msg}</div>
+          {feedback.kind === 'err' && /unauthorized_client|DWD not authorized/i.test(feedback.msg) && status.data?.sa_client_id && (
+            <div className="mt-2 pt-2 border-t border-red-200 text-xs text-red-900">
+              <div>👉 Open <a className="underline" href="https://admin.google.com/ac/owl/domainwidedelegation" target="_blank" rel="noreferrer">Workspace Admin → Domain-Wide Delegation</a></div>
+              <div>👉 Click <strong>Add new</strong> (or edit existing entry)</div>
+              <div>👉 Client ID: <code className="bg-white px-1 rounded font-mono">{status.data.sa_client_id}</code></div>
+              <div>👉 Paste all four scopes from the guide above (one line, comma-separated)</div>
+              <div>👉 Click <strong>Authorize</strong>, wait 1–2 min, then Test again</div>
+            </div>
+          )}
         </div>
       )}
     </div>

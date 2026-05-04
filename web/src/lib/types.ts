@@ -39,6 +39,7 @@ export interface WorkspaceStatus {
   delegated_admin?: string;
   customer_id?: string;
   sa_email?: string;
+  sa_client_id?: string;
   project_id?: string;
   updated_at?: string;
   required_scopes: string[];
@@ -48,6 +49,7 @@ export interface WorkspaceCredentials {
   delegated_admin: string;
   customer_id: string;
   sa_email?: string;
+  sa_client_id?: string;
   project_id?: string;
   updated_at: string;
 }

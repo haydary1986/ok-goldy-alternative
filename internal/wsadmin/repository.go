@@ -17,14 +17,14 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 // Get returns the current credentials row, or (nil, nil) if no row exists.
 func (r *Repository) Get(ctx context.Context) (*Credentials, error) {
 	const sqlStmt = `
-		SELECT sa_json, delegated_admin, customer_id, sa_email, project_id, updated_at
+		SELECT sa_json, delegated_admin, customer_id, sa_email, sa_client_id, project_id, updated_at
 		FROM workspace_credentials
 		WHERE id = 1
 	`
 	var c Credentials
-	var saEmail, projectID *string
+	var saEmail, saClientID, projectID *string
 	err := r.pool.QueryRow(ctx, sqlStmt).Scan(
-		&c.SAJSON, &c.DelegatedAdmin, &c.CustomerID, &saEmail, &projectID, &c.UpdatedAt,
+		&c.SAJSON, &c.DelegatedAdmin, &c.CustomerID, &saEmail, &saClientID, &projectID, &c.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -34,6 +34,9 @@ func (r *Repository) Get(ctx context.Context) (*Credentials, error) {
 	}
 	if saEmail != nil {
 		c.SAEmail = *saEmail
+	}
+	if saClientID != nil {
+		c.SAClientID = *saClientID
 	}
 	if projectID != nil {
 		c.ProjectID = *projectID
@@ -45,18 +48,20 @@ func (r *Repository) Get(ctx context.Context) (*Credentials, error) {
 func (r *Repository) Upsert(ctx context.Context, c *Credentials) error {
 	const sqlStmt = `
 		INSERT INTO workspace_credentials
-			(id, sa_json, delegated_admin, customer_id, sa_email, project_id, updated_at)
-		VALUES (1, $1, $2, $3, $4, $5, NOW())
+			(id, sa_json, delegated_admin, customer_id, sa_email, sa_client_id, project_id, updated_at)
+		VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
 		ON CONFLICT (id) DO UPDATE SET
 			sa_json         = EXCLUDED.sa_json,
 			delegated_admin = EXCLUDED.delegated_admin,
 			customer_id     = EXCLUDED.customer_id,
 			sa_email        = EXCLUDED.sa_email,
+			sa_client_id    = EXCLUDED.sa_client_id,
 			project_id      = EXCLUDED.project_id,
 			updated_at      = NOW()
 	`
 	if _, err := r.pool.Exec(ctx, sqlStmt,
-		c.SAJSON, c.DelegatedAdmin, c.CustomerID, nullableString(c.SAEmail), nullableString(c.ProjectID),
+		c.SAJSON, c.DelegatedAdmin, c.CustomerID,
+		nullableString(c.SAEmail), nullableString(c.SAClientID), nullableString(c.ProjectID),
 	); err != nil {
 		return fmt.Errorf("wsadmin: upsert credentials: %w", err)
 	}

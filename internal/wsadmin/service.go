@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 )
@@ -55,6 +56,7 @@ func (s *Service) Status(ctx context.Context) (*StatusResponse, error) {
 		out.DelegatedAdmin = creds.DelegatedAdmin
 		out.CustomerID = creds.CustomerID
 		out.SAEmail = creds.SAEmail
+		out.SAClientID = creds.SAClientID
 		out.ProjectID = creds.ProjectID
 		out.UpdatedAt = creds.UpdatedAt
 		return out, nil
@@ -76,7 +78,7 @@ func (s *Service) Save(ctx context.Context, req UploadRequest) (*Credentials, er
 		return nil, errInvalid("service account JSON file is required")
 	}
 
-	saEmail, projectID, err := parseSAJSON(req.SAJSON)
+	saMeta, err := parseSAJSON(req.SAJSON)
 	if err != nil {
 		return nil, errInvalid(err.Error())
 	}
@@ -103,8 +105,9 @@ func (s *Service) Save(ctx context.Context, req UploadRequest) (*Credentials, er
 		SAJSON:         req.SAJSON,
 		DelegatedAdmin: req.DelegatedAdmin,
 		CustomerID:     customerID,
-		SAEmail:        saEmail,
-		ProjectID:      projectID,
+		SAEmail:        saMeta.ClientEmail,
+		SAClientID:     saMeta.ClientID,
+		ProjectID:      saMeta.ProjectID,
 	}
 	if err := s.repo.Upsert(ctx, creds); err != nil {
 		return nil, err
@@ -133,6 +136,10 @@ func (s *Service) Delete(ctx context.Context) error {
 }
 
 // Test attempts a no-op Workspace call to confirm the credentials work.
+// On the most common DWD misconfiguration ("unauthorized_client"), the
+// returned error is wrapped with a friendly hint that includes the SA's
+// Client ID so the operator knows exactly what to paste into Workspace
+// Admin → Domain-Wide Delegation.
 func (s *Service) Test(ctx context.Context) error {
 	if s.provider == nil {
 		return ErrNotConfigured
@@ -142,28 +149,66 @@ func (s *Service) Test(ctx context.Context) error {
 		return ErrNotConfigured
 	}
 	if _, _, err := c.ListUsersPage(ctx, "", 1); err != nil {
-		return fmt.Errorf("wsadmin: test connection: %w", err)
+		return s.wrapAuthError(ctx, err)
 	}
 	return nil
 }
 
-// parseSAJSON pulls the client_email and project_id out of the SA JSON for
-// display purposes and to confirm the file is well-formed.
-func parseSAJSON(b []byte) (email, projectID string, err error) {
+// wrapAuthError detects "unauthorized_client" errors (the canonical signal
+// that Domain-Wide Delegation has not been authorized for the SA's Client
+// ID with the right scopes) and rewrites them into something an operator
+// can act on.
+func (s *Service) wrapAuthError(ctx context.Context, err error) error {
+	msg := err.Error()
+	if !strings.Contains(msg, "unauthorized_client") {
+		return fmt.Errorf("wsadmin: test connection: %w", err)
+	}
+	creds, _ := s.repo.Get(ctx)
+	clientID := ""
+	if creds != nil {
+		clientID = creds.SAClientID
+	}
+	if clientID == "" {
+		return fmt.Errorf("DWD not authorized: open Workspace Admin → Security → API Controls → Manage Domain-Wide Delegation, add this SA's Client ID with the four required scopes, and retry")
+	}
+	return fmt.Errorf(
+		"DWD not authorized for Client ID %s. Open Workspace Admin → Domain-Wide Delegation, add (or edit) the entry for that exact Client ID and authorize the four required scopes, then retry. Original: %v",
+		clientID, err,
+	)
+}
+
+// saMetadata captures the public, display-safe fields extracted from a
+// service-account JSON key. It deliberately excludes private_key.
+type saMetadata struct {
+	ClientEmail string
+	ClientID    string
+	ProjectID   string
+}
+
+// parseSAJSON pulls the public identifiers out of the SA JSON. The
+// client_id is the 21-digit Unique ID that has to be added to Workspace
+// Admin → Domain-Wide Delegation; without it, the resulting OAuth token
+// exchange returns "unauthorized_client".
+func parseSAJSON(b []byte) (*saMetadata, error) {
 	var aux struct {
 		Type        string `json:"type"`
 		ClientEmail string `json:"client_email"`
+		ClientID    string `json:"client_id"`
 		ProjectID   string `json:"project_id"`
 		PrivateKey  string `json:"private_key"`
 	}
 	if err := json.Unmarshal(b, &aux); err != nil {
-		return "", "", fmt.Errorf("not valid JSON: %w", err)
+		return nil, fmt.Errorf("not valid JSON: %w", err)
 	}
 	if aux.Type != "service_account" {
-		return "", "", fmt.Errorf("expected type=service_account, got %q", aux.Type)
+		return nil, fmt.Errorf("expected type=service_account, got %q", aux.Type)
 	}
 	if aux.ClientEmail == "" || aux.PrivateKey == "" {
-		return "", "", fmt.Errorf("missing client_email or private_key in JSON")
+		return nil, fmt.Errorf("missing client_email or private_key in JSON")
 	}
-	return aux.ClientEmail, aux.ProjectID, nil
+	return &saMetadata{
+		ClientEmail: aux.ClientEmail,
+		ClientID:    aux.ClientID,
+		ProjectID:   aux.ProjectID,
+	}, nil
 }

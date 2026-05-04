@@ -11,6 +11,7 @@ type Credentials struct {
 	DelegatedAdmin string    `json:"delegated_admin"`
 	CustomerID     string    `json:"customer_id"`
 	SAEmail        string    `json:"sa_email,omitempty"`
+	SAClientID     string    `json:"sa_client_id,omitempty"`
 	ProjectID      string    `json:"project_id,omitempty"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
@@ -22,6 +23,7 @@ type StatusResponse struct {
 	DelegatedAdmin string    `json:"delegated_admin,omitempty"`
 	CustomerID     string    `json:"customer_id,omitempty"`
 	SAEmail        string    `json:"sa_email,omitempty"`
+	SAClientID     string    `json:"sa_client_id,omitempty"`
 	ProjectID      string    `json:"project_id,omitempty"`
 	UpdatedAt      time.Time `json:"updated_at,omitempty"`
 	RequiredScopes []string  `json:"required_scopes"`

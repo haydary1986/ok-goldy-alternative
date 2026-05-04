@@ -21,7 +21,7 @@ export default function Users() {
       {q.isLoading && <div className="text-gray-500 text-sm">Loading users…</div>}
       {q.isError && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-red-700 text-sm">
-          {(q.error as Error).message}
+          {(q.error as Error).message}ارقعه
         </div>
       )}
 
