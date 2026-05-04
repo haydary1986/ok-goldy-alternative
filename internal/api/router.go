@@ -13,11 +13,22 @@ import (
 	"github.com/haydary1986/ok-goldy-alternative/internal/config"
 )
 
-// Deps groups the dependencies handed to the router.
+// RouteRegistrar is the function shape used to mount a domain's sub-router
+// without creating a circular import between api and the domain packages.
+type RouteRegistrar func(chi.Router)
+
+// Deps groups the dependencies handed to the router. RouteRegistrar fields
+// are optional — when nil, the matching route group falls back to a 501 stub
+// so the OpenAPI surface stays stable while features land.
 type Deps struct {
 	Logger *slog.Logger
 	DB     *pgxpool.Pool
 	Config *config.Config
+
+	UsersRoutes   RouteRegistrar
+	GroupsRoutes  RouteRegistrar
+	JobsRoutes    RouteRegistrar
+	AuditRoutes   RouteRegistrar
 }
 
 // NewRouter builds the root chi router with middleware and v1 routes.
@@ -31,7 +42,7 @@ func NewRouter(deps Deps) http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-Goldy-Actor"},
 		ExposedHeaders:   []string{"X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -41,42 +52,60 @@ func NewRouter(deps Deps) http.Handler {
 	r.Get("/readyz", readyz(deps))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-			r.Get("/{id}", notImplemented)
-			r.Patch("/{id}", notImplemented)
-			r.Delete("/{id}", notImplemented)
-			r.Post("/bulk/import", notImplemented)
-			r.Get("/bulk/export", notImplemented)
-			r.Route("/{id}/aliases", func(r chi.Router) {
-				r.Get("/", notImplemented)
-				r.Post("/", notImplemented)
-				r.Delete("/{alias}", notImplemented)
-			})
-		})
-
-		r.Route("/groups", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Post("/", notImplemented)
-			r.Get("/{id}", notImplemented)
-			r.Delete("/{id}", notImplemented)
-			r.Route("/{id}/members", func(r chi.Router) {
-				r.Get("/", notImplemented)
-				r.Post("/", notImplemented)
-				r.Delete("/{member}", notImplemented)
-			})
-		})
-
-		r.Route("/jobs", func(r chi.Router) {
-			r.Get("/", notImplemented)
-			r.Get("/{id}", notImplemented)
-		})
-
-		r.Get("/audit", notImplemented)
+		mount(r, "/users", deps.UsersRoutes, stubUsers)
+		mount(r, "/groups", deps.GroupsRoutes, stubGroups)
+		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
+		mount(r, "/audit", deps.AuditRoutes, stubAudit)
 	})
 
 	return r
+}
+
+// mount registers `path` against either the supplied registrar or the fallback.
+func mount(r chi.Router, path string, supplied, fallback RouteRegistrar) {
+	if supplied != nil {
+		r.Route(path, supplied)
+	} else {
+		r.Route(path, fallback)
+	}
+}
+
+// --- fallback "not implemented" stubs ---
+
+func stubUsers(r chi.Router) {
+	r.Get("/", notImplemented)
+	r.Post("/", notImplemented)
+	r.Get("/{id}", notImplemented)
+	r.Patch("/{id}", notImplemented)
+	r.Delete("/{id}", notImplemented)
+	r.Post("/bulk/import", notImplemented)
+	r.Get("/bulk/export", notImplemented)
+	r.Route("/{id}/aliases", func(r chi.Router) {
+		r.Get("/", notImplemented)
+		r.Post("/", notImplemented)
+		r.Delete("/{alias}", notImplemented)
+	})
+}
+
+func stubGroups(r chi.Router) {
+	r.Get("/", notImplemented)
+	r.Post("/", notImplemented)
+	r.Get("/{id}", notImplemented)
+	r.Delete("/{id}", notImplemented)
+	r.Route("/{id}/members", func(r chi.Router) {
+		r.Get("/", notImplemented)
+		r.Post("/", notImplemented)
+		r.Delete("/{member}", notImplemented)
+	})
+}
+
+func stubJobs(r chi.Router) {
+	r.Get("/", notImplemented)
+	r.Get("/{id}", notImplemented)
+}
+
+func stubAudit(r chi.Router) {
+	r.Get("/", notImplemented)
 }
 
 func notImplemented(w http.ResponseWriter, _ *http.Request) {

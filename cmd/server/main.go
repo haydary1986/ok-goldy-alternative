@@ -11,9 +11,12 @@ import (
 	"time"
 
 	"github.com/haydary1986/ok-goldy-alternative/internal/api"
+	"github.com/haydary1986/ok-goldy-alternative/internal/audit"
 	"github.com/haydary1986/ok-goldy-alternative/internal/config"
 	"github.com/haydary1986/ok-goldy-alternative/internal/db"
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
+	"github.com/haydary1986/ok-goldy-alternative/internal/users"
+	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 )
 
 func main() {
@@ -36,7 +39,22 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := api.NewRouter(api.Deps{Logger: logger, DB: pool, Config: cfg})
+	// Workspace client is best-effort: a missing service-account file should
+	// not block the server from starting (it simply causes affected endpoints
+	// to return 503). This makes local dev possible before SA setup is done.
+	wsClient := buildWorkspaceClient(ctx, cfg, logger)
+
+	auditSvc := audit.New(pool)
+	usersRepo := users.NewRepository(pool)
+	usersSvc := users.NewService(wsClient, usersRepo)
+	usersHandler := users.NewHandler(usersSvc, auditSvc)
+
+	router := api.NewRouter(api.Deps{
+		Logger:       logger,
+		DB:           pool,
+		Config:       cfg,
+		UsersRoutes:  usersHandler.Routes(),
+	})
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -61,4 +79,34 @@ func main() {
 		logger.Error("graceful shutdown failed", "err", err)
 	}
 	logger.Info("server stopped")
+}
+
+// buildWorkspaceClient tries to construct the Admin SDK client. On failure it
+// logs a warning and returns nil so the server can still start.
+func buildWorkspaceClient(ctx context.Context, cfg *config.Config, logger interface {
+	Warn(msg string, args ...any)
+	Info(msg string, args ...any)
+}) *workspace.Client {
+	if cfg.GoogleDelegatedAdmin == "" {
+		logger.Warn("workspace not configured",
+			"hint", "set GOLDY_GOOGLE_DELEGATED_ADMIN and provide a service-account key to enable Workspace endpoints")
+		return nil
+	}
+	client, err := workspace.New(ctx, workspace.Config{
+		ServiceAccountKeyFile: cfg.GoogleSAKeyFile,
+		DelegatedAdmin:        cfg.GoogleDelegatedAdmin,
+		CustomerID:            cfg.GoogleCustomerID,
+		RateLimitRPS:          cfg.RateLimitRPS,
+		RateLimitBurst:        cfg.RateLimitBurst,
+	})
+	if err != nil {
+		logger.Warn("workspace client unavailable", "err", err)
+		return nil
+	}
+	logger.Info("workspace client ready",
+		"delegated_admin", cfg.GoogleDelegatedAdmin,
+		"customer_id", cfg.GoogleCustomerID,
+		"rate_rps", cfg.RateLimitRPS,
+	)
+	return client
 }
