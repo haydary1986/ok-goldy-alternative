@@ -20,15 +20,21 @@ type RouteRegistrar func(chi.Router)
 // Deps groups the dependencies handed to the router. RouteRegistrar fields
 // are optional — when nil, the matching route group falls back to a 501 stub
 // so the OpenAPI surface stays stable while features land.
+//
+// SPA, when set, is served on every path that doesn't match an explicit API
+// or health route (via chi's NotFound handler). Unknown paths fall back to
+// index.html so React Router can resolve them client-side.
 type Deps struct {
 	Logger *slog.Logger
 	DB     *pgxpool.Pool
 	Config *config.Config
 
-	UsersRoutes   RouteRegistrar
-	GroupsRoutes  RouteRegistrar
-	JobsRoutes    RouteRegistrar
-	AuditRoutes   RouteRegistrar
+	UsersRoutes  RouteRegistrar
+	GroupsRoutes RouteRegistrar
+	JobsRoutes   RouteRegistrar
+	AuditRoutes  RouteRegistrar
+
+	SPA http.Handler
 }
 
 // NewRouter builds the root chi router with middleware and v1 routes.
@@ -60,6 +66,12 @@ func NewRouter(deps Deps) http.Handler {
 		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
 		mount(r, "/audit", deps.AuditRoutes, stubAudit)
 	})
+
+	// SPA fallback. Anything that did not match an explicit route above is
+	// handed to the embedded React build (or 404 if no SPA was wired).
+	if deps.SPA != nil {
+		r.NotFound(deps.SPA.ServeHTTP)
+	}
 
 	return r
 }

@@ -29,7 +29,8 @@ service-account.json
 
 # Frontend
 /web/node_modules/
-/web/dist/
+/web/dist/*
+!/web/dist/index.html
 /web/.vite/
 
 # Coverage

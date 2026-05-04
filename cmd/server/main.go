@@ -18,6 +18,7 @@ import (
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
+	"github.com/haydary1986/ok-goldy-alternative/web"
 )
 
 func main() {
@@ -54,12 +55,18 @@ func main() {
 	groupsSvc := groups.NewService(wsClient)
 	groupsHandler := groups.NewHandler(groupsSvc, auditSvc)
 
+	spaHandler, err := web.Handler()
+	if err != nil {
+		logger.Warn("SPA handler unavailable", "err", err)
+	}
+
 	router := api.NewRouter(api.Deps{
 		Logger:       logger,
 		DB:           pool,
 		Config:       cfg,
 		UsersRoutes:  usersHandler.Routes(),
 		GroupsRoutes: groupsHandler.Routes(),
+		SPA:          spaHandler,
 	})
 
 	srv := &http.Server{
