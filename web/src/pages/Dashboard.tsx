@@ -14,6 +14,7 @@ export default function Dashboard() {
         <Card title="Users" description="Bulk create / update / suspend / delete" to="/users" />
         <Card title="Groups" description="Manage groups and members in bulk" to="/groups" />
         <Card title="Audit log" description="Every mutation, recorded" to="/audit" />
+        <Card title="Settings" description="Upload service-account JSON to enable Workspace API" to="/settings" />
       </div>
 
       <section className="bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-700 space-y-2">

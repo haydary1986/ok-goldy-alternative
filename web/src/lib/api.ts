@@ -34,7 +34,7 @@ export function setActor(email: string): void {
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
-  if (init?.body && !headers.has('Content-Type')) {
+  if (init?.body && !headers.has('Content-Type') && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -56,4 +56,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(body.error?.message ?? `HTTP ${res.status}`);
   }
   return body.data as T;
+}
+
+// apiUpload posts a multipart/form-data body. The browser sets the boundary
+// header automatically, so we don't preset Content-Type.
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  return api<T>(path, { method: 'POST', body: form });
 }

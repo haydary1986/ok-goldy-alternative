@@ -18,6 +18,7 @@ import (
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
+	"github.com/haydary1986/ok-goldy-alternative/internal/wsadmin"
 	"github.com/haydary1986/ok-goldy-alternative/web"
 )
 
@@ -41,19 +42,33 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Workspace client is best-effort: a missing service-account file should
-	// not block the server from starting (it simply causes affected endpoints
-	// to return 503). This makes local dev possible before SA setup is done.
-	wsClient := buildWorkspaceClient(ctx, cfg, logger)
+	// Workspace credentials come from one of three sources, in order of
+	// precedence: (1) the workspace_credentials DB row populated by an admin
+	// uploading a service-account JSON via Settings, (2) the GOLDY_GOOGLE_*
+	// env vars if a key file is mounted, (3) nothing — affected endpoints
+	// return 503 until an admin configures Goldy.
+	wsProv := workspace.NewProvider(nil)
+	wsCredsRepo := wsadmin.NewRepository(pool)
+	if err := loadWorkspaceFromDB(ctx, wsCredsRepo, wsProv, cfg, logger); err != nil {
+		logger.Warn("failed to load workspace credentials from DB", "err", err)
+	}
+	if wsProv.Get() == nil {
+		if c := buildWorkspaceClientFromEnv(ctx, cfg, logger); c != nil {
+			wsProv.Set(c)
+		}
+	}
 
 	auditSvc := audit.New(pool)
 
 	usersRepo := users.NewRepository(pool)
-	usersSvc := users.NewService(wsClient, usersRepo)
+	usersSvc := users.NewService(wsProv, usersRepo)
 	usersHandler := users.NewHandler(usersSvc, auditSvc)
 
-	groupsSvc := groups.NewService(wsClient)
+	groupsSvc := groups.NewService(wsProv)
 	groupsHandler := groups.NewHandler(groupsSvc, auditSvc)
+
+	wsadminSvc := wsadmin.NewService(wsCredsRepo, wsProv, cfg.RateLimitRPS, cfg.RateLimitBurst)
+	wsadminHandler := wsadmin.NewHandler(wsadminSvc, auditSvc)
 
 	spaHandler, err := web.Handler()
 	if err != nil {
@@ -66,6 +81,7 @@ func main() {
 		Config:       cfg,
 		UsersRoutes:  usersHandler.Routes(),
 		GroupsRoutes: groupsHandler.Routes(),
+		AdminRoutes:  wsadminHandler.Routes(),
 		SPA:          spaHandler,
 	})
 
@@ -94,15 +110,47 @@ func main() {
 	logger.Info("server stopped")
 }
 
-// buildWorkspaceClient tries to construct the Admin SDK client. On failure it
-// logs a warning and returns nil so the server can still start.
-func buildWorkspaceClient(ctx context.Context, cfg *config.Config, logger interface {
+// loadWorkspaceFromDB hydrates the provider from the workspace_credentials
+// row, if one exists. Missing rows are not an error.
+func loadWorkspaceFromDB(ctx context.Context, repo *wsadmin.Repository, prov *workspace.Provider, cfg *config.Config, logger interface {
+	Warn(msg string, args ...any)
+	Info(msg string, args ...any)
+}) error {
+	creds, err := repo.Get(ctx)
+	if err != nil {
+		return err
+	}
+	if creds == nil {
+		return nil
+	}
+	client, err := workspace.New(ctx, workspace.Config{
+		ServiceAccountKey: creds.SAJSON,
+		DelegatedAdmin:    creds.DelegatedAdmin,
+		CustomerID:        creds.CustomerID,
+		RateLimitRPS:      cfg.RateLimitRPS,
+		RateLimitBurst:    cfg.RateLimitBurst,
+	})
+	if err != nil {
+		return err
+	}
+	prov.Set(client)
+	logger.Info("workspace client loaded from database",
+		"delegated_admin", creds.DelegatedAdmin,
+		"customer_id", creds.CustomerID,
+		"sa_email", creds.SAEmail,
+	)
+	return nil
+}
+
+// buildWorkspaceClientFromEnv tries to construct the Admin SDK client from
+// environment variables. On failure it logs a warning and returns nil.
+func buildWorkspaceClientFromEnv(ctx context.Context, cfg *config.Config, logger interface {
 	Warn(msg string, args ...any)
 	Info(msg string, args ...any)
 }) *workspace.Client {
 	if cfg.GoogleDelegatedAdmin == "" {
 		logger.Warn("workspace not configured",
-			"hint", "set GOLDY_GOOGLE_DELEGATED_ADMIN and provide a service-account key to enable Workspace endpoints")
+			"hint", "upload a service-account JSON via /settings or set GOLDY_GOOGLE_DELEGATED_ADMIN env var")
 		return nil
 	}
 	client, err := workspace.New(ctx, workspace.Config{

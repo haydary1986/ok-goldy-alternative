@@ -10,28 +10,42 @@ import (
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 )
 
-// Service composes a workspace.Client (live data) with a Repository
-// (local cache) and exposes the use-cases the HTTP handlers consume.
+// Service composes a workspace.Provider (live data, hot-swappable client)
+// with a Repository (local cache) and exposes the use-cases the HTTP
+// handlers consume.
 //
-// Both the Workspace client and the Repository are optional — when either is
-// nil the relevant methods return a typed error so the HTTP layer can map it
-// to the right status code.
+// Both the Provider and the Repository are optional — when the provider has
+// no client (nil) the relevant methods return ErrWorkspaceUnavailable so the
+// HTTP layer can map it to a 503.
 type Service struct {
-	ws   *workspace.Client
-	repo *Repository
+	wsProv *workspace.Provider
+	repo   *Repository
 }
 
-func NewService(ws *workspace.Client, repo *Repository) *Service {
-	return &Service{ws: ws, repo: repo}
+func NewService(wsProv *workspace.Provider, repo *Repository) *Service {
+	return &Service{wsProv: wsProv, repo: repo}
+}
+
+// client returns the current workspace client or ErrWorkspaceUnavailable.
+func (s *Service) client() (*workspace.Client, error) {
+	if s.wsProv == nil {
+		return nil, ErrWorkspaceUnavailable
+	}
+	c := s.wsProv.Get()
+	if c == nil {
+		return nil, ErrWorkspaceUnavailable
+	}
+	return c, nil
 }
 
 // ListLive fetches a single page of users straight from Workspace, opportunistically
 // refreshing the local cache as a side effect.
 func (s *Service) ListLive(ctx context.Context, pageToken string, pageSize int64) (*ListResponse, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	apiUsers, next, err := s.ws.ListUsersPage(ctx, pageToken, pageSize)
+	apiUsers, next, err := c.ListUsersPage(ctx, pageToken, pageSize)
 	if err != nil {
 		return nil, fmt.Errorf("users: list live: %w", err)
 	}
@@ -57,10 +71,11 @@ func (s *Service) ListCached(ctx context.Context, limit, offset int) ([]User, in
 
 // Get fetches one user by ID or primary email.
 func (s *Service) Get(ctx context.Context, key string) (*User, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	u, err := s.ws.GetUser(ctx, key)
+	u, err := c.GetUser(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("users: get: %w", err)
 	}
@@ -73,8 +88,9 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*User, error) 
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
 	apiUser := &admin.User{
 		PrimaryEmail: req.PrimaryEmail,
@@ -85,7 +101,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*User, error) 
 		Password:    req.Password,
 		OrgUnitPath: req.OrgUnitPath,
 	}
-	out, err := s.ws.InsertUser(ctx, apiUser)
+	out, err := c.InsertUser(ctx, apiUser)
 	if err != nil {
 		return nil, fmt.Errorf("users: create: %w", err)
 	}
@@ -99,8 +115,9 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*User, error) 
 
 // Update applies a partial update to an existing user.
 func (s *Service) Update(ctx context.Context, key string, req UpdateRequest) (*User, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
 	patch := &admin.User{}
 	var force []string
@@ -126,7 +143,7 @@ func (s *Service) Update(ctx context.Context, key string, req UpdateRequest) (*U
 	}
 	patch.ForceSendFields = force
 
-	out, err := s.ws.UpdateUser(ctx, key, patch)
+	out, err := c.UpdateUser(ctx, key, patch)
 	if err != nil {
 		return nil, fmt.Errorf("users: update %s: %w", key, err)
 	}
@@ -140,10 +157,11 @@ func (s *Service) Update(ctx context.Context, key string, req UpdateRequest) (*U
 
 // Delete permanently removes a user from Workspace and the local cache.
 func (s *Service) Delete(ctx context.Context, key string) error {
-	if s.ws == nil {
-		return ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return err
 	}
-	if err := s.ws.DeleteUser(ctx, key); err != nil {
+	if err := c.DeleteUser(ctx, key); err != nil {
 		return fmt.Errorf("users: delete %s: %w", key, err)
 	}
 	if s.repo != nil {

@@ -33,6 +33,7 @@ type Deps struct {
 	GroupsRoutes RouteRegistrar
 	JobsRoutes   RouteRegistrar
 	AuditRoutes  RouteRegistrar
+	AdminRoutes  RouteRegistrar
 
 	SPA http.Handler
 }
@@ -65,6 +66,9 @@ func NewRouter(deps Deps) http.Handler {
 		mount(r, "/groups", deps.GroupsRoutes, stubGroups)
 		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
 		mount(r, "/audit", deps.AuditRoutes, stubAudit)
+		if deps.AdminRoutes != nil {
+			r.Route("/admin", deps.AdminRoutes)
+		}
 	})
 
 	// SPA fallback. Anything that did not match an explicit route above is

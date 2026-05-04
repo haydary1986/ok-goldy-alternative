@@ -7,6 +7,7 @@ const navItems = [
   { to: '/users', label: 'Users' },
   { to: '/groups', label: 'Groups' },
   { to: '/audit', label: 'Audit log' },
+  { to: '/settings', label: 'Settings' },
 ];
 
 export default function Layout() {

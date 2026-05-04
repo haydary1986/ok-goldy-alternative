@@ -10,18 +10,31 @@ import (
 )
 
 // Service exposes Group and Member use-cases. The workspace client is
-// optional; when nil, every method returns ErrWorkspaceUnavailable.
-type Service struct{ ws *workspace.Client }
+// hot-swappable via a Provider; when no client is set, every method
+// returns ErrWorkspaceUnavailable.
+type Service struct{ wsProv *workspace.Provider }
 
-func NewService(ws *workspace.Client) *Service { return &Service{ws: ws} }
+func NewService(wsProv *workspace.Provider) *Service { return &Service{wsProv: wsProv} }
+
+func (s *Service) client() (*workspace.Client, error) {
+	if s.wsProv == nil {
+		return nil, ErrWorkspaceUnavailable
+	}
+	c := s.wsProv.Get()
+	if c == nil {
+		return nil, ErrWorkspaceUnavailable
+	}
+	return c, nil
+}
 
 // --- groups ---
 
 func (s *Service) List(ctx context.Context, pageToken string, pageSize int64) (*ListGroupsResponse, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	apiGroups, next, err := s.ws.ListGroupsPage(ctx, pageToken, pageSize)
+	apiGroups, next, err := c.ListGroupsPage(ctx, pageToken, pageSize)
 	if err != nil {
 		return nil, fmt.Errorf("groups: list: %w", err)
 	}
@@ -33,10 +46,11 @@ func (s *Service) List(ctx context.Context, pageToken string, pageSize int64) (*
 }
 
 func (s *Service) Get(ctx context.Context, key string) (*Group, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	g, err := s.ws.GetGroup(ctx, key)
+	g, err := c.GetGroup(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("groups: get: %w", err)
 	}
@@ -48,10 +62,11 @@ func (s *Service) Create(ctx context.Context, req CreateGroupRequest) (*Group, e
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	out, err := s.ws.InsertGroup(ctx, &admin.Group{
+	out, err := c.InsertGroup(ctx, &admin.Group{
 		Email:       req.Email,
 		Name:        req.Name,
 		Description: req.Description,
@@ -64,10 +79,11 @@ func (s *Service) Create(ctx context.Context, req CreateGroupRequest) (*Group, e
 }
 
 func (s *Service) Delete(ctx context.Context, key string) error {
-	if s.ws == nil {
-		return ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return err
 	}
-	if err := s.ws.DeleteGroup(ctx, key); err != nil {
+	if err := c.DeleteGroup(ctx, key); err != nil {
 		return fmt.Errorf("groups: delete: %w", err)
 	}
 	return nil
@@ -76,10 +92,11 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 // --- members ---
 
 func (s *Service) ListMembers(ctx context.Context, groupKey, pageToken string, pageSize int64) (*ListMembersResponse, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	apiMembers, next, err := s.ws.ListMembersPage(ctx, groupKey, pageToken, pageSize)
+	apiMembers, next, err := c.ListMembersPage(ctx, groupKey, pageToken, pageSize)
 	if err != nil {
 		return nil, fmt.Errorf("groups: list members: %w", err)
 	}
@@ -94,14 +111,15 @@ func (s *Service) AddMember(ctx context.Context, groupKey string, req AddMemberR
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
 	role := req.Role
 	if role == "" {
 		role = "MEMBER"
 	}
-	out, err := s.ws.InsertMember(ctx, groupKey, &admin.Member{
+	out, err := c.InsertMember(ctx, groupKey, &admin.Member{
 		Email: req.Email,
 		Role:  role,
 	})
@@ -113,10 +131,11 @@ func (s *Service) AddMember(ctx context.Context, groupKey string, req AddMemberR
 }
 
 func (s *Service) RemoveMember(ctx context.Context, groupKey, memberKey string) error {
-	if s.ws == nil {
-		return ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return err
 	}
-	if err := s.ws.DeleteMember(ctx, groupKey, memberKey); err != nil {
+	if err := c.DeleteMember(ctx, groupKey, memberKey); err != nil {
 		return fmt.Errorf("groups: remove member: %w", err)
 	}
 	return nil

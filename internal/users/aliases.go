@@ -32,10 +32,11 @@ func (r AddAliasRequest) Validate() error {
 // --- service methods ---
 
 func (s *Service) ListAliases(ctx context.Context, userKey string) ([]Alias, error) {
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	items, err := s.ws.ListAliases(ctx, userKey)
+	items, err := c.ListAliases(ctx, userKey)
 	if err != nil {
 		return nil, fmt.Errorf("users: list aliases: %w", err)
 	}
@@ -50,10 +51,11 @@ func (s *Service) AddAlias(ctx context.Context, userKey string, req AddAliasRequ
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if s.ws == nil {
-		return nil, ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return nil, err
 	}
-	created, err := s.ws.InsertAlias(ctx, userKey, req.Alias)
+	created, err := c.InsertAlias(ctx, userKey, req.Alias)
 	if err != nil {
 		return nil, fmt.Errorf("users: add alias: %w", err)
 	}
@@ -64,10 +66,11 @@ func (s *Service) AddAlias(ctx context.Context, userKey string, req AddAliasRequ
 }
 
 func (s *Service) DeleteAlias(ctx context.Context, userKey, alias string) error {
-	if s.ws == nil {
-		return ErrWorkspaceUnavailable
+	c, err := s.client()
+	if err != nil {
+		return err
 	}
-	if err := s.ws.DeleteAlias(ctx, userKey, alias); err != nil {
+	if err := c.DeleteAlias(ctx, userKey, alias); err != nil {
 		return fmt.Errorf("users: delete alias: %w", err)
 	}
 	return nil

@@ -23,7 +23,12 @@ var DefaultScopes = []string{
 }
 
 // Config holds the inputs needed to construct a workspace.Client.
+//
+// Either ServiceAccountKey (raw JSON bytes, preferred — used when credentials
+// come from the database via the admin UI) or ServiceAccountKeyFile (path on
+// disk, used when credentials come from environment variables) must be set.
 type Config struct {
+	ServiceAccountKey     []byte
 	ServiceAccountKeyFile string
 	DelegatedAdmin        string
 	CustomerID            string
@@ -42,15 +47,19 @@ type Client struct {
 // configured to impersonate the delegated super-admin user.
 func New(ctx context.Context, c Config) (*Client, error) {
 	if c.DelegatedAdmin == "" {
-		return nil, fmt.Errorf("workspace: GOLDY_GOOGLE_DELEGATED_ADMIN is required")
-	}
-	if c.ServiceAccountKeyFile == "" {
-		return nil, fmt.Errorf("workspace: GOLDY_GOOGLE_SA_KEY_FILE is required")
+		return nil, fmt.Errorf("workspace: delegated admin email is required")
 	}
 
-	keyBytes, err := os.ReadFile(c.ServiceAccountKeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("workspace: read sa key: %w", err)
+	keyBytes := c.ServiceAccountKey
+	if len(keyBytes) == 0 {
+		if c.ServiceAccountKeyFile == "" {
+			return nil, fmt.Errorf("workspace: ServiceAccountKey bytes or ServiceAccountKeyFile path is required")
+		}
+		fileBytes, err := os.ReadFile(c.ServiceAccountKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("workspace: read sa key file: %w", err)
+		}
+		keyBytes = fileBytes
 	}
 
 	jwtCfg, err := google.JWTConfigFromJSON(keyBytes, DefaultScopes...)

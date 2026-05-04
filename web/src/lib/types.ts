@@ -32,3 +32,22 @@ export interface Member {
   role?: 'OWNER' | 'MANAGER' | 'MEMBER';
   type?: 'USER' | 'GROUP' | 'EXTERNAL';
 }
+
+export interface WorkspaceStatus {
+  configured: boolean;
+  source?: 'db' | 'env' | '';
+  delegated_admin?: string;
+  customer_id?: string;
+  sa_email?: string;
+  project_id?: string;
+  updated_at?: string;
+  required_scopes: string[];
+}
+
+export interface WorkspaceCredentials {
+  delegated_admin: string;
+  customer_id: string;
+  sa_email?: string;
+  project_id?: string;
+  updated_at: string;
+}
