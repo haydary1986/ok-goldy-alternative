@@ -39,6 +39,9 @@ func NewRouter(deps Deps) http.Handler {
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
 	r.Use(slogRequestLogger(deps.Logger))
+	if deps.Config != nil && deps.Config.BasicAuthUser != "" && deps.Config.BasicAuthPassword != "" {
+		r.Use(basicAuth(deps.Config.BasicAuthUser, deps.Config.BasicAuthPassword))
+	}
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

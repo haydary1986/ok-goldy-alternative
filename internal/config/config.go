@@ -32,6 +32,9 @@ type Config struct {
 
 	AllowedAdmins []string
 	SessionSecret string
+
+	BasicAuthUser     string
+	BasicAuthPassword string
 }
 
 func Load() (*Config, error) {
@@ -53,6 +56,8 @@ func Load() (*Config, error) {
 		WorkerConcurrency:    getenvInt("GOLDY_WORKER_CONCURRENCY", 10),
 		AllowedAdmins:        splitCSV(os.Getenv("GOLDY_ALLOWED_ADMINS")),
 		SessionSecret:        getenv("GOLDY_SESSION_SECRET", ""),
+		BasicAuthUser:        getenv("GOLDY_BASIC_AUTH_USER", ""),
+		BasicAuthPassword:    getenv("GOLDY_BASIC_AUTH_PASSWORD", ""),
 	}
 
 	if err := cfg.validate(); err != nil {

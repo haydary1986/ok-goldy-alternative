@@ -1,24 +1,25 @@
+# Goldy — Coolify-compatible docker-compose.
+# Coolify injects every environment variable defined in its UI into the host
+# environment of the compose run, so ${VAR} interpolation works for all
+# services.
+
 services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: goldy
-      POSTGRES_PASSWORD: goldy
-      POSTGRES_DB: goldy
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-goldy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-goldy}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U goldy -d goldy"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goldy} -d ${POSTGRES_DB:-goldy}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -31,19 +32,32 @@ services:
     build: .
     entrypoint: ["/app/migrate", "up"]
     environment:
-      GOLDY_DATABASE_URL: postgres://goldy:goldy@postgres:5432/goldy?sslmode=disable
+      GOLDY_DATABASE_URL: ${GOLDY_DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
 
   server:
     build: .
     entrypoint: ["/app/server"]
-    env_file: .env
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./secrets:/secrets:ro
+    environment:
+      GOLDY_HTTP_ADDR: ${GOLDY_HTTP_ADDR:-0.0.0.0:8080}
+      GOLDY_LOG_LEVEL: ${GOLDY_LOG_LEVEL:-info}
+      GOLDY_LOG_FORMAT: ${GOLDY_LOG_FORMAT:-json}
+      GOLDY_DATABASE_URL: ${GOLDY_DATABASE_URL}
+      GOLDY_REDIS_ADDR: ${GOLDY_REDIS_ADDR:-redis:6379}
+      GOLDY_REDIS_PASSWORD: ${GOLDY_REDIS_PASSWORD:-}
+      GOLDY_REDIS_DB: ${GOLDY_REDIS_DB:-0}
+      GOLDY_GOOGLE_SA_KEY_FILE: ${GOLDY_GOOGLE_SA_KEY_FILE:-/secrets/service-account.json}
+      GOLDY_GOOGLE_DELEGATED_ADMIN: ${GOLDY_GOOGLE_DELEGATED_ADMIN:-}
+      GOLDY_GOOGLE_CUSTOMER_ID: ${GOLDY_GOOGLE_CUSTOMER_ID:-my_customer}
+      GOLDY_RATE_LIMIT_RPS: ${GOLDY_RATE_LIMIT_RPS:-20}
+      GOLDY_RATE_LIMIT_BURST: ${GOLDY_RATE_LIMIT_BURST:-40}
+      GOLDY_BASIC_AUTH_USER: ${GOLDY_BASIC_AUTH_USER:-}
+      GOLDY_BASIC_AUTH_PASSWORD: ${GOLDY_BASIC_AUTH_PASSWORD:-}
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,18 +65,23 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "/app/server", "--healthcheck"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   worker:
     build: .
     entrypoint: ["/app/worker"]
-    env_file: .env
-    volumes:
-      - ./secrets:/secrets:ro
+    environment:
+      GOLDY_LOG_LEVEL: ${GOLDY_LOG_LEVEL:-info}
+      GOLDY_LOG_FORMAT: ${GOLDY_LOG_FORMAT:-json}
+      GOLDY_DATABASE_URL: ${GOLDY_DATABASE_URL}
+      GOLDY_REDIS_ADDR: ${GOLDY_REDIS_ADDR:-redis:6379}
+      GOLDY_REDIS_PASSWORD: ${GOLDY_REDIS_PASSWORD:-}
+      GOLDY_REDIS_DB: ${GOLDY_REDIS_DB:-0}
+      GOLDY_GOOGLE_SA_KEY_FILE: ${GOLDY_GOOGLE_SA_KEY_FILE:-/secrets/service-account.json}
+      GOLDY_GOOGLE_DELEGATED_ADMIN: ${GOLDY_GOOGLE_DELEGATED_ADMIN:-}
+      GOLDY_GOOGLE_CUSTOMER_ID: ${GOLDY_GOOGLE_CUSTOMER_ID:-my_customer}
+      GOLDY_RATE_LIMIT_RPS: ${GOLDY_RATE_LIMIT_RPS:-20}
+      GOLDY_RATE_LIMIT_BURST: ${GOLDY_RATE_LIMIT_BURST:-40}
+      GOLDY_WORKER_CONCURRENCY: ${GOLDY_WORKER_CONCURRENCY:-10}
     depends_on:
       postgres:
         condition: service_healthy
