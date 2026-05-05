@@ -29,11 +29,12 @@ type Deps struct {
 	DB     *pgxpool.Pool
 	Config *config.Config
 
-	UsersRoutes  RouteRegistrar
-	GroupsRoutes RouteRegistrar
-	JobsRoutes   RouteRegistrar
-	AuditRoutes  RouteRegistrar
-	AdminRoutes  RouteRegistrar
+	UsersRoutes    RouteRegistrar
+	GroupsRoutes   RouteRegistrar
+	OrgUnitsRoutes RouteRegistrar
+	JobsRoutes     RouteRegistrar
+	AuditRoutes    RouteRegistrar
+	AdminRoutes    RouteRegistrar
 
 	SPA http.Handler
 }
@@ -64,6 +65,9 @@ func NewRouter(deps Deps) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		mount(r, "/users", deps.UsersRoutes, stubUsers)
 		mount(r, "/groups", deps.GroupsRoutes, stubGroups)
+		if deps.OrgUnitsRoutes != nil {
+			r.Route("/orgunits", deps.OrgUnitsRoutes)
+		}
 		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
 		mount(r, "/audit", deps.AuditRoutes, stubAudit)
 		if deps.AdminRoutes != nil {

@@ -47,7 +47,7 @@ func NewService(repo *Repository, provider *workspace.Provider, rps, burst int) 
 
 // Status returns the current configuration shape (without secrets) for the UI.
 func (s *Service) Status(ctx context.Context) (*StatusResponse, error) {
-	out := &StatusResponse{RequiredScopes: workspace.DefaultScopes}
+	out := &StatusResponse{RequiredScopes: workspace.AllRequiredScopes()}
 	creds, err := s.repo.Get(ctx)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,14 @@ func (s *Service) Save(ctx context.Context, req UploadRequest) (*Credentials, er
 	}
 
 	if s.provider != nil {
-		s.provider.Set(client)
+		wsCfg := workspace.Config{
+			ServiceAccountKey: req.SAJSON,
+			DelegatedAdmin:    req.DelegatedAdmin,
+			CustomerID:        customerID,
+			RateLimitRPS:      s.rateLimitRPS,
+			RateLimitBurst:    s.rateLimitBurst,
+		}
+		s.provider.Set(client, &wsCfg)
 	}
 	// Re-read so UpdatedAt is populated from the DB.
 	saved, err := s.repo.Get(ctx)
@@ -132,7 +139,7 @@ func (s *Service) Delete(ctx context.Context) error {
 		return err
 	}
 	if s.provider != nil {
-		s.provider.Set(nil)
+		s.provider.Set(nil, nil)
 	}
 	return nil
 }
@@ -155,8 +162,9 @@ func (s *Service) Diagnostic(ctx context.Context) (*DiagnosticResponse, error) {
 	// endpoint), and it avoids false negatives from probing scopes against
 	// APIs that require a different scope (e.g. you can't validate
 	// admin.directory.group.member by hitting Users.List).
-	probes := make([]ScopeProbe, 0, len(workspace.DefaultScopes))
-	for _, scope := range workspace.DefaultScopes {
+	allScopes := workspace.AllRequiredScopes()
+	probes := make([]ScopeProbe, 0, len(allScopes))
+	for _, scope := range allScopes {
 		probe := ScopeProbe{Scope: scope}
 		jwtCfg, err := google.JWTConfigFromJSON(creds.SAJSON, scope)
 		if err != nil {

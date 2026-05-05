@@ -13,13 +13,38 @@ import (
 	"google.golang.org/api/option"
 )
 
-// DefaultScopes are the OAuth scopes Goldy requires from the service account.
-// These must be authorized via Domain-Wide Delegation by a super admin.
+// DefaultScopes are the OAuth scopes the *main* Workspace client uses for
+// users/groups/members/aliases. Each call from the main client is signed
+// with a JWT requesting exactly these scopes, so a regression here would
+// instantly break the Users page for everyone whose DWD entry still has
+// only these four authorized.
+//
+// Optional scopes (e.g. AdminDirectoryOrgunitScope) live in OrgUnitScopes
+// and are requested by separate, per-domain clients so that adding a new
+// integration cannot break a working DWD setup.
 var DefaultScopes = []string{
 	admin.AdminDirectoryUserScope,
 	admin.AdminDirectoryGroupScope,
 	admin.AdminDirectoryGroupMemberScope,
 	admin.AdminDirectoryUserAliasScope,
+}
+
+// OrgUnitScopes is the minimal scope set for org-unit list/create. Goldy's
+// orgunits domain builds its own client with this scope only, so a missing
+// orgunit authorization in DWD shows up as "OU operations failed" rather
+// than the catastrophic "everything failed".
+var OrgUnitScopes = []string{
+	admin.AdminDirectoryOrgunitScope,
+}
+
+// AllRequiredScopes returns the full list of scopes the operator must
+// authorize in DWD if they want every Goldy feature to work. Used by the
+// Settings page and the per-scope diagnostic.
+func AllRequiredScopes() []string {
+	out := make([]string, 0, len(DefaultScopes)+len(OrgUnitScopes))
+	out = append(out, DefaultScopes...)
+	out = append(out, OrgUnitScopes...)
+	return out
 }
 
 // Config holds the inputs needed to construct a workspace.Client.

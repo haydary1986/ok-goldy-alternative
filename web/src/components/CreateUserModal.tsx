@@ -4,6 +4,7 @@ import Modal from './Modal';
 import { useToast } from './Toast';
 import { apiPost } from '../lib/api';
 import type { CreateUserRequest, User } from '../lib/types';
+import OrgUnitSelect from './OrgUnitSelect';
 
 interface Props {
   open: boolean;
@@ -106,12 +107,10 @@ export default function CreateUserModal({ open, onClose }: Props) {
             Generate strong password
           </button>
         </Field>
-        <Field label="Organisational unit" hint="Defaults to / (root)">
-          <input
+        <Field label="Organisational unit" hint="Pick from the list or create a new OU inline.">
+          <OrgUnitSelect
             value={form.org_unit_path ?? ''}
-            onChange={(e) => set('org_unit_path')(e.target.value)}
-            placeholder="/"
-            className="w-full font-mono text-xs border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            onChange={(p) => set('org_unit_path')(p)}
           />
         </Field>
       </div>

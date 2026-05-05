@@ -4,6 +4,7 @@ import Drawer from './Drawer';
 import { useToast } from './Toast';
 import { api, apiDelete, apiPatch, apiPost } from '../lib/api';
 import type { Alias, UpdateUserRequest, User } from '../lib/types';
+import OrgUnitSelect from './OrgUnitSelect';
 
 interface Props {
   user: User | null;
@@ -158,12 +159,7 @@ export default function UserEditDrawer({ user, onClose, onDeleted }: Props) {
               />
             </Field>
             <Field label="Organisational unit">
-              <input
-                value={orgUnit}
-                onChange={(e) => setOrgUnit(e.target.value)}
-                placeholder="/"
-                className="w-full font-mono text-xs border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:border-blue-500"
-              />
+              <OrgUnitSelect value={orgUnit} onChange={setOrgUnit} />
             </Field>
             <Field label="Suspended">
               <label className="inline-flex items-center gap-2 text-sm">

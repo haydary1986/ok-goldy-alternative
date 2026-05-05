@@ -61,6 +61,24 @@ export interface MembersListResponse {
   next_page_token?: string;
 }
 
+export interface OrgUnit {
+  org_unit_id?: string;
+  name: string;
+  org_unit_path: string;
+  parent_org_unit_path?: string;
+  description?: string;
+}
+
+export interface OrgUnitsListResponse {
+  org_units: OrgUnit[];
+}
+
+export interface CreateOrgUnitRequest {
+  name: string;
+  parent_org_unit_path: string;
+  description?: string;
+}
+
 export interface Member {
   id?: string;
   email: string;

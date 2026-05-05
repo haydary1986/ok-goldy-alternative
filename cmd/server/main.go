@@ -16,6 +16,7 @@ import (
 	"github.com/haydary1986/ok-goldy-alternative/internal/db"
 	"github.com/haydary1986/ok-goldy-alternative/internal/groups"
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
+	"github.com/haydary1986/ok-goldy-alternative/internal/orgunits"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 	"github.com/haydary1986/ok-goldy-alternative/internal/wsadmin"
@@ -53,8 +54,8 @@ func main() {
 		logger.Warn("failed to load workspace credentials from DB", "err", err)
 	}
 	if wsProv.Get() == nil {
-		if c := buildWorkspaceClientFromEnv(ctx, cfg, logger); c != nil {
-			wsProv.Set(c)
+		if c, envCfg := buildWorkspaceClientFromEnv(ctx, cfg, logger); c != nil {
+			wsProv.Set(c, envCfg)
 		}
 	}
 
@@ -67,6 +68,9 @@ func main() {
 	groupsSvc := groups.NewService(wsProv)
 	groupsHandler := groups.NewHandler(groupsSvc, auditSvc)
 
+	orgunitsSvc := orgunits.NewService(wsProv)
+	orgunitsHandler := orgunits.NewHandler(orgunitsSvc, auditSvc)
+
 	wsadminSvc := wsadmin.NewService(wsCredsRepo, wsProv, cfg.RateLimitRPS, cfg.RateLimitBurst)
 	wsadminHandler := wsadmin.NewHandler(wsadminSvc, auditSvc)
 
@@ -76,13 +80,14 @@ func main() {
 	}
 
 	router := api.NewRouter(api.Deps{
-		Logger:       logger,
-		DB:           pool,
-		Config:       cfg,
-		UsersRoutes:  usersHandler.Routes(),
-		GroupsRoutes: groupsHandler.Routes(),
-		AdminRoutes:  wsadminHandler.Routes(),
-		SPA:          spaHandler,
+		Logger:         logger,
+		DB:             pool,
+		Config:         cfg,
+		UsersRoutes:    usersHandler.Routes(),
+		GroupsRoutes:   groupsHandler.Routes(),
+		OrgUnitsRoutes: orgunitsHandler.Routes(),
+		AdminRoutes:    wsadminHandler.Routes(),
+		SPA:            spaHandler,
 	})
 
 	srv := &http.Server{
@@ -123,17 +128,18 @@ func loadWorkspaceFromDB(ctx context.Context, repo *wsadmin.Repository, prov *wo
 	if creds == nil {
 		return nil
 	}
-	client, err := workspace.New(ctx, workspace.Config{
+	wsCfg := workspace.Config{
 		ServiceAccountKey: creds.SAJSON,
 		DelegatedAdmin:    creds.DelegatedAdmin,
 		CustomerID:        creds.CustomerID,
 		RateLimitRPS:      cfg.RateLimitRPS,
 		RateLimitBurst:    cfg.RateLimitBurst,
-	})
+	}
+	client, err := workspace.New(ctx, wsCfg)
 	if err != nil {
 		return err
 	}
-	prov.Set(client)
+	prov.Set(client, &wsCfg)
 	logger.Info("workspace client loaded from database",
 		"delegated_admin", creds.DelegatedAdmin,
 		"customer_id", creds.CustomerID,
@@ -143,31 +149,33 @@ func loadWorkspaceFromDB(ctx context.Context, repo *wsadmin.Repository, prov *wo
 }
 
 // buildWorkspaceClientFromEnv tries to construct the Admin SDK client from
-// environment variables. On failure it logs a warning and returns nil.
+// environment variables. Returns the client and the Config that built it,
+// or (nil, nil) on failure (with a warning logged).
 func buildWorkspaceClientFromEnv(ctx context.Context, cfg *config.Config, logger interface {
 	Warn(msg string, args ...any)
 	Info(msg string, args ...any)
-}) *workspace.Client {
+}) (*workspace.Client, *workspace.Config) {
 	if cfg.GoogleDelegatedAdmin == "" {
 		logger.Warn("workspace not configured",
 			"hint", "upload a service-account JSON via /settings or set GOLDY_GOOGLE_DELEGATED_ADMIN env var")
-		return nil
+		return nil, nil
 	}
-	client, err := workspace.New(ctx, workspace.Config{
+	wsCfg := workspace.Config{
 		ServiceAccountKeyFile: cfg.GoogleSAKeyFile,
 		DelegatedAdmin:        cfg.GoogleDelegatedAdmin,
 		CustomerID:            cfg.GoogleCustomerID,
 		RateLimitRPS:          cfg.RateLimitRPS,
 		RateLimitBurst:        cfg.RateLimitBurst,
-	})
+	}
+	client, err := workspace.New(ctx, wsCfg)
 	if err != nil {
 		logger.Warn("workspace client unavailable", "err", err)
-		return nil
+		return nil, nil
 	}
 	logger.Info("workspace client ready",
 		"delegated_admin", cfg.GoogleDelegatedAdmin,
 		"customer_id", cfg.GoogleCustomerID,
 		"rate_rps", cfg.RateLimitRPS,
 	)
-	return client
+	return client, &wsCfg
 }
