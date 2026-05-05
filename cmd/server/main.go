@@ -18,6 +18,7 @@ import (
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
 	"github.com/haydary1986/ok-goldy-alternative/internal/orgunits"
 	"github.com/haydary1986/ok-goldy-alternative/internal/stats"
+	"github.com/haydary1986/ok-goldy-alternative/internal/usage"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 	"github.com/haydary1986/ok-goldy-alternative/internal/wsadmin"
@@ -72,6 +73,9 @@ func main() {
 	orgunitsSvc := orgunits.NewService(wsProv)
 	orgunitsHandler := orgunits.NewHandler(orgunitsSvc, auditSvc)
 
+	usageSvc := usage.NewService(wsProv)
+	usageHandler := usage.NewHandler(usageSvc)
+
 	wsadminSvc := wsadmin.NewService(wsCredsRepo, wsProv, cfg.RateLimitRPS, cfg.RateLimitBurst)
 	wsadminHandler := wsadmin.NewHandler(wsadminSvc, auditSvc)
 
@@ -92,6 +96,7 @@ func main() {
 		UsersRoutes:    usersHandler.Routes(),
 		GroupsRoutes:   groupsHandler.Routes(),
 		OrgUnitsRoutes: orgunitsHandler.Routes(),
+		UsageRoutes:    usageHandler.Routes(),
 		AuditRoutes:    auditHandler.Routes(),
 		StatsRoutes:    statsHandler.Routes(),
 		AdminRoutes:    wsadminHandler.Routes(),

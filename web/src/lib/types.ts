@@ -160,6 +160,27 @@ export interface AuditListResponse {
   offset: number;
 }
 
+export interface UserUsage {
+  user_email: string;
+  last_login_time?: string;
+  gmail_last_interaction?: string;
+  gmail_num_received: number;
+  gmail_num_sent: number;
+  drive_used_mb: number;
+  drive_total_mb: number;
+  drive_items_owned: number;
+  has_drive_presence: boolean;
+  has_gmail_presence: boolean;
+}
+
+export interface UsageSnapshot {
+  date: string;
+  generated_at: string;
+  duration_ms: number;
+  total_users: number;
+  users: Record<string, UserUsage>;
+}
+
 export interface Member {
   id?: string;
   email: string;
