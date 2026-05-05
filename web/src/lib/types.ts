@@ -6,6 +6,8 @@ export interface User {
   org_unit_path?: string;
   suspended: boolean;
   is_admin: boolean;
+  creation_time?: string;
+  last_login_time?: string;
 }
 
 export interface UsersListResponse {
