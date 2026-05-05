@@ -202,7 +202,7 @@ func buildDiagnosticSummary(clientID string, probes []ScopeProbe) string {
 	}
 	if okCount == 0 {
 		return fmt.Sprintf(
-			"None of the required scopes authorized. Most likely Domain-Wide Delegation has no entry for Client ID %s, or the entry exists with a different Client ID. Open Workspace Admin → Domain-Wide Delegation, add %s with all four scopes, click Authorize, wait 1–2 min, and re-run the test.",
+			"None of the required scopes authorized. Most likely Domain-Wide Delegation has no entry for Client ID %s, or the entry exists with a different Client ID. Open Workspace Admin → Domain-Wide Delegation, add %s with all required scopes (see the list above), click Authorize, wait 1–2 min, and re-run the test.",
 			clientID, clientID,
 		)
 	}
@@ -213,7 +213,7 @@ func buildDiagnosticSummary(clientID string, probes []ScopeProbe) string {
 		}
 	}
 	return fmt.Sprintf(
-		"Some scopes are missing from DWD: %s. Open Workspace Admin → Domain-Wide Delegation → entry for Client ID %s → Edit → re-paste all four scopes (one line, comma-separated) → Authorize.",
+		"Some scopes are missing from DWD: %s. Open Workspace Admin → Domain-Wide Delegation → entry for Client ID %s → Edit → re-paste the full list of required scopes (one line, comma-separated) → Authorize.",
 		strings.Join(missing, ", "), clientID,
 	)
 }
@@ -269,10 +269,10 @@ func (s *Service) wrapAuthError(ctx context.Context, err error) error {
 		clientID = creds.SAClientID
 	}
 	if clientID == "" {
-		return fmt.Errorf("DWD not authorized: open Workspace Admin → Security → API Controls → Manage Domain-Wide Delegation, add this SA's Client ID with the four required scopes, and retry")
+		return fmt.Errorf("DWD not authorized: open Workspace Admin → Security → API Controls → Manage Domain-Wide Delegation, add this SA's Client ID with all required scopes, and retry")
 	}
 	return fmt.Errorf(
-		"DWD not authorized for Client ID %s. Open Workspace Admin → Domain-Wide Delegation, add (or edit) the entry for that exact Client ID and authorize the four required scopes, then retry. Original: %v",
+		"DWD not authorized for Client ID %s. Open Workspace Admin → Domain-Wide Delegation, add (or edit) the entry for that exact Client ID and authorize all required scopes, then retry. Original: %v",
 		clientID, err,
 	)
 }
