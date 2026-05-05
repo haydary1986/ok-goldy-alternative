@@ -3,6 +3,7 @@ package users
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -32,6 +33,10 @@ func (h *Handler) Routes() func(chi.Router) {
 		r.Get("/{id}", h.Get)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
+
+		// Inactive accounts finder + bulk suspend (the killer Ok Goldy flow).
+		r.Get("/inactive", h.Inactive)
+		r.Post("/bulk/suspend", h.BulkSuspend)
 
 		// Bulk endpoints (CSV import / export) — wired later, return 501 today.
 		r.Post("/bulk/import", h.notImplemented)
@@ -109,6 +114,47 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.WriteData(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+}
+
+func (h *Handler) Inactive(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	days, _ := strconv.Atoi(q.Get("days"))
+	includeAdmins := q.Get("include_admins") == "true"
+	includeSuspended := q.Get("include_suspended") == "true"
+	out, err := h.svc.Inactive(r.Context(), InactiveQuery{
+		Days:             days,
+		IncludeAdmins:    includeAdmins,
+		IncludeSuspended: includeSuspended,
+	})
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	api.WriteData(w, http.StatusOK, out)
+}
+
+func (h *Handler) BulkSuspend(w http.ResponseWriter, r *http.Request) {
+	var req BulkSuspendRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	if len(req.UserIDs) == 0 {
+		api.WriteError(w, http.StatusBadRequest, "invalid_request", "user_ids is required")
+		return
+	}
+	if len(req.UserIDs) > 5000 {
+		api.WriteError(w, http.StatusBadRequest, "invalid_request", "max 5000 users per request")
+		return
+	}
+	resp := h.svc.BulkSuspend(r.Context(), req.UserIDs, req.Suspended)
+	action := audit.ActionRestore
+	if req.Suspended {
+		action = audit.ActionSuspend
+	}
+	h.recordAudit(r, action, fmt.Sprintf("bulk:%d/%d ok", resp.Successful, resp.Total),
+		nil, map[string]any{"successful": resp.Successful, "failed": resp.Failed}, nil)
+	api.WriteData(w, http.StatusOK, resp)
 }
 
 func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {

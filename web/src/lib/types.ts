@@ -79,6 +79,85 @@ export interface CreateOrgUnitRequest {
   description?: string;
 }
 
+export interface OUUserCount {
+  org_unit_path: string;
+  total: number;
+  active: number;
+  suspended: number;
+}
+
+export interface StatsOverview {
+  generated_at: string;
+  duration_ms: number;
+
+  total_users: number;
+  active_users: number;
+  suspended_users: number;
+  admin_users: number;
+  never_logged_in: number;
+
+  inactive_30d: number;
+  inactive_90d: number;
+  inactive_180d: number;
+  inactive_365d: number;
+
+  created_last_7d: number;
+  created_last_30d: number;
+  created_last_90d: number;
+
+  users_by_ou: OUUserCount[];
+
+  total_groups: number;
+  empty_groups: number;
+  total_group_members: number;
+}
+
+export interface InactiveListResponse {
+  users: User[];
+  total: number;
+  days: number;
+  cutoff: string;
+}
+
+export interface BulkSuspendRequest {
+  user_ids: string[];
+  suspended: boolean;
+}
+
+export interface BulkSuspendResult {
+  user_id: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface BulkSuspendResponse {
+  total: number;
+  successful: number;
+  failed: number;
+  results: BulkSuspendResult[];
+}
+
+export interface AuditEntry {
+  id: number;
+  occurred_at: string;
+  actor: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  request_id?: string;
+  before?: unknown;
+  after?: unknown;
+  ok: boolean;
+  error_message?: string;
+}
+
+export interface AuditListResponse {
+  entries: AuditEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface Member {
   id?: string;
   email: string;

@@ -5,6 +5,7 @@ import { getActor, setActor } from '../lib/api';
 const navItems = [
   { to: '/', label: 'Dashboard' },
   { to: '/users', label: 'Users' },
+  { to: '/inactive', label: 'Inactive' },
   { to: '/groups', label: 'Groups' },
   { to: '/audit', label: 'Audit log' },
   { to: '/settings', label: 'Settings' },

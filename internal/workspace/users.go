@@ -21,6 +21,7 @@ func (c *Client) ListUsersPage(ctx context.Context, pageToken string, pageSize i
 		Customer(c.customerID).
 		MaxResults(pageSize).
 		OrderBy("email").
+		Projection("full").
 		Context(ctx)
 	if pageToken != "" {
 		call = call.PageToken(pageToken)

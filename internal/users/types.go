@@ -57,3 +57,39 @@ type ListResponse struct {
 	Users         []User `json:"users"`
 	NextPageToken string `json:"next_page_token,omitempty"`
 }
+
+// InactiveQuery shapes the GET /api/v1/users/inactive request.
+type InactiveQuery struct {
+	Days             int  `json:"days"`
+	IncludeAdmins    bool `json:"include_admins"`
+	IncludeSuspended bool `json:"include_suspended"`
+}
+
+// InactiveListResponse is what /users/inactive returns.
+type InactiveListResponse struct {
+	Users  []User    `json:"users"`
+	Total  int       `json:"total"`
+	Days   int       `json:"days"`
+	Cutoff time.Time `json:"cutoff"`
+}
+
+// BulkSuspendRequest is the body of POST /api/v1/users/bulk/suspend.
+type BulkSuspendRequest struct {
+	UserIDs   []string `json:"user_ids"`
+	Suspended bool     `json:"suspended"`
+}
+
+// BulkSuspendResult is the per-user outcome.
+type BulkSuspendResult struct {
+	UserID string `json:"user_id"`
+	OK     bool   `json:"ok"`
+	Error  string `json:"error,omitempty"`
+}
+
+// BulkSuspendResponse aggregates a bulk operation's outcome.
+type BulkSuspendResponse struct {
+	Total      int                 `json:"total"`
+	Successful int                 `json:"successful"`
+	Failed     int                 `json:"failed"`
+	Results    []BulkSuspendResult `json:"results"`
+}

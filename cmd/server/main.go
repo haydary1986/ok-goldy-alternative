@@ -17,6 +17,7 @@ import (
 	"github.com/haydary1986/ok-goldy-alternative/internal/groups"
 	applog "github.com/haydary1986/ok-goldy-alternative/internal/log"
 	"github.com/haydary1986/ok-goldy-alternative/internal/orgunits"
+	"github.com/haydary1986/ok-goldy-alternative/internal/stats"
 	"github.com/haydary1986/ok-goldy-alternative/internal/users"
 	"github.com/haydary1986/ok-goldy-alternative/internal/workspace"
 	"github.com/haydary1986/ok-goldy-alternative/internal/wsadmin"
@@ -74,6 +75,11 @@ func main() {
 	wsadminSvc := wsadmin.NewService(wsCredsRepo, wsProv, cfg.RateLimitRPS, cfg.RateLimitBurst)
 	wsadminHandler := wsadmin.NewHandler(wsadminSvc, auditSvc)
 
+	statsSvc := stats.NewService(usersSvc, groupsSvc)
+	statsHandler := stats.NewHandler(statsSvc)
+
+	auditHandler := audit.NewHandler(auditSvc)
+
 	spaHandler, err := web.Handler()
 	if err != nil {
 		logger.Warn("SPA handler unavailable", "err", err)
@@ -86,6 +92,8 @@ func main() {
 		UsersRoutes:    usersHandler.Routes(),
 		GroupsRoutes:   groupsHandler.Routes(),
 		OrgUnitsRoutes: orgunitsHandler.Routes(),
+		AuditRoutes:    auditHandler.Routes(),
+		StatsRoutes:    statsHandler.Routes(),
 		AdminRoutes:    wsadminHandler.Routes(),
 		SPA:            spaHandler,
 	})

@@ -34,6 +34,7 @@ type Deps struct {
 	OrgUnitsRoutes RouteRegistrar
 	JobsRoutes     RouteRegistrar
 	AuditRoutes    RouteRegistrar
+	StatsRoutes    RouteRegistrar
 	AdminRoutes    RouteRegistrar
 
 	SPA http.Handler
@@ -70,6 +71,9 @@ func NewRouter(deps Deps) http.Handler {
 		}
 		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
 		mount(r, "/audit", deps.AuditRoutes, stubAudit)
+		if deps.StatsRoutes != nil {
+			r.Route("/stats", deps.StatsRoutes)
+		}
 		if deps.AdminRoutes != nil {
 			r.Route("/admin", deps.AdminRoutes)
 		}
