@@ -5,6 +5,7 @@ import Users from './pages/Users';
 import Groups from './pages/Groups';
 import Audit from './pages/Audit';
 import Inactive from './pages/Inactive';
+import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/inactive" element={<Inactive />} />
         <Route path="/groups" element={<Groups />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/audit" element={<Audit />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

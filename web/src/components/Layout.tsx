@@ -7,6 +7,7 @@ const navItems = [
   { to: '/users', label: 'Users' },
   { to: '/inactive', label: 'Inactive' },
   { to: '/groups', label: 'Groups' },
+  { to: '/reports', label: 'Reports' },
   { to: '/audit', label: 'Audit log' },
   { to: '/settings', label: 'Settings' },
 ];
