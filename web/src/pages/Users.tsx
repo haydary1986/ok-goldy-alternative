@@ -1,17 +1,23 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { User, UsersListResponse } from '../lib/types';
+import type {
+  OrgUnitsListResponse,
+  UsageSnapshot,
+  User,
+  UsersListResponse,
+} from '../lib/types';
 import UserEditDrawer from '../components/UserEditDrawer';
 import CreateUserModal from '../components/CreateUserModal';
 
 const PAGE_SIZE = 100;
 
 export default function Users() {
-  const [pageStack, setPageStack] = useState<string[]>([]); // tokens we've seen, including current
+  const [pageStack, setPageStack] = useState<string[]>([]);
   const currentToken = pageStack[pageStack.length - 1] ?? '';
   const [search, setSearch] = useState('');
   const [showSuspended, setShowSuspended] = useState<'all' | 'active' | 'suspended'>('all');
+  const [orgUnit, setOrgUnit] = useState<string>('');
   const [editing, setEditing] = useState<User | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -23,12 +29,29 @@ export default function Users() {
       ),
   });
 
-  const filtered = useMemo(() => {
+  const ouQ = useQuery({
+    queryKey: ['orgunits'],
+    queryFn: () => api<OrgUnitsListResponse>('/orgunits'),
+    staleTime: 5 * 60_000,
+  });
+
+  // Usage data (Drive / Gmail) is fetched once for the whole tenant and
+  // joined with the displayed page client-side. The Reports API has a
+  // 24-48h lag so we don't refresh aggressively.
+  const usageQ = useQuery({
+    queryKey: ['usage-snapshot'],
+    queryFn: () => api<UsageSnapshot>('/usage/users'),
+    staleTime: 30 * 60_000,
+    retry: false,
+  });
+
+  const filtered = useMemo<User[]>(() => {
     if (!q.data) return [];
     const s = search.trim().toLowerCase();
     return q.data.users.filter((u) => {
       if (showSuspended === 'active' && u.suspended) return false;
       if (showSuspended === 'suspended' && !u.suspended) return false;
+      if (orgUnit && u.org_unit_path !== orgUnit) return false;
       if (!s) return true;
       const hay = [u.primary_email, u.given_name, u.family_name, u.org_unit_path]
         .filter(Boolean)
@@ -36,7 +59,7 @@ export default function Users() {
         .toLowerCase();
       return hay.includes(s);
     });
-  }, [q.data, search, showSuspended]);
+  }, [q.data, search, showSuspended, orgUnit]);
 
   const goNext = () => {
     if (q.data?.next_page_token) {
@@ -81,11 +104,39 @@ export default function Users() {
           onChange={(e) => setShowSuspended(e.target.value as 'all' | 'active' | 'suspended')}
           className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white"
         >
-          <option value="all">All</option>
+          <option value="all">All statuses</option>
           <option value="active">Active only</option>
           <option value="suspended">Suspended only</option>
         </select>
+        <select
+          value={orgUnit}
+          onChange={(e) => setOrgUnit(e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white max-w-xs font-mono text-xs"
+          title="Filter by Organisational Unit"
+        >
+          <option value="">— Any OU —</option>
+          {(ouQ.data?.org_units ?? []).map((ou) => (
+            <option key={ou.org_unit_path} value={ou.org_unit_path}>
+              {ou.org_unit_path}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {usageQ.isError && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900 text-xs">
+          Drive / Gmail usage unavailable: {(usageQ.error as Error).message.slice(0, 200)}
+          {' '}— add the <code className="bg-amber-100 px-1 rounded">admin.reports.usage.readonly</code> scope to DWD
+          (see <a href="/settings" className="underline">Settings</a>) and reload.
+        </div>
+      )}
+      {usageQ.data && (
+        <div className="text-xs text-gray-500">
+          Drive / Gmail usage from {new Date(usageQ.data.date).toLocaleDateString()} ·
+          {' '}{usageQ.data.total_users.toLocaleString()} users in snapshot ·
+          {' '}{usageQ.isFetching ? 'refreshing…' : 'cached'}
+        </div>
+      )}
 
       {q.isLoading && <div className="text-gray-500 text-sm">Loading users…</div>}
       {q.isError && (
@@ -102,46 +153,63 @@ export default function Users() {
                 <th className="px-3 py-2 font-medium text-gray-700">Email</th>
                 <th className="px-3 py-2 font-medium text-gray-700">Name</th>
                 <th className="px-3 py-2 font-medium text-gray-700">Org Unit</th>
+                <th className="px-3 py-2 font-medium text-gray-700 text-right">Drive</th>
+                <th className="px-3 py-2 font-medium text-gray-700 text-right">Mail in/out</th>
+                <th className="px-3 py-2 font-medium text-gray-700">Last login</th>
+                <th className="px-3 py-2 font-medium text-gray-700">Last mail</th>
                 <th className="px-3 py-2 font-medium text-gray-700">Status</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setEditing(u)}>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-800">{u.primary_email}</td>
-                  <td className="px-3 py-2">
-                    {[u.given_name, u.family_name].filter(Boolean).join(' ') || (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-gray-500 font-mono text-xs">{u.org_unit_path ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    {u.suspended ? (
-                      <span className="inline-flex items-center gap-1 text-red-700 text-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                        Suspended
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-green-700 text-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        Active
-                      </span>
-                    )}
-                    {u.is_admin && (
-                      <span className="ml-2 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
-                        admin
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <span className="text-blue-600 hover:underline text-xs">Edit ↗</span>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((u) => {
+                const usage = usageQ.data?.users[u.primary_email];
+                return (
+                  <tr key={u.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setEditing(u)}>
+                    <td className="px-3 py-1.5 font-mono text-xs text-gray-800">{u.primary_email}</td>
+                    <td className="px-3 py-1.5">
+                      {[u.given_name, u.family_name].filter(Boolean).join(' ') || (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-500 font-mono text-xs">{u.org_unit_path ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-right text-xs">
+                      {usage ? formatDriveUsage(usage.drive_used_mb, usage.drive_total_mb) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-xs text-gray-600">
+                      {usage ? `${usage.gmail_num_received.toLocaleString()} / ${usage.gmail_num_sent.toLocaleString()}` : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-gray-600">{formatDate(u.last_login_time)}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-600">
+                      {usage ? formatDate(usage.gmail_last_interaction) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {u.suspended ? (
+                        <span className="inline-flex items-center gap-1 text-red-700 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                          Suspended
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-green-700 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Active
+                        </span>
+                      )}
+                      {u.is_admin && (
+                        <span className="ml-1 text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                          admin
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <span className="text-blue-600 hover:underline text-xs">Edit ↗</span>
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
                     No users match the current filters.
                   </td>
                 </tr>
@@ -176,4 +244,23 @@ export default function Users() {
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
     </div>
   );
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return '—';
+  const t = new Date(iso);
+  if (t.getFullYear() < 1971 || t.getFullYear() === 1) return 'Never';
+  return t.toLocaleDateString();
+}
+
+function formatDriveUsage(usedMB: number, totalMB: number): string {
+  if (usedMB === 0 && totalMB === 0) return '—';
+  const usedGB = usedMB / 1024;
+  const totalGB = totalMB > 0 ? totalMB / 1024 : 0;
+  const usedStr = usedGB >= 1 ? `${usedGB.toFixed(1)} GB` : `${usedMB} MB`;
+  if (totalGB > 0) {
+    const pct = (usedMB / totalMB) * 100;
+    return `${usedStr} (${pct.toFixed(0)}%)`;
+  }
+  return usedStr;
 }

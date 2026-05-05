@@ -32,6 +32,7 @@ type Deps struct {
 	UsersRoutes    RouteRegistrar
 	GroupsRoutes   RouteRegistrar
 	OrgUnitsRoutes RouteRegistrar
+	UsageRoutes    RouteRegistrar
 	JobsRoutes     RouteRegistrar
 	AuditRoutes    RouteRegistrar
 	StatsRoutes    RouteRegistrar
@@ -68,6 +69,9 @@ func NewRouter(deps Deps) http.Handler {
 		mount(r, "/groups", deps.GroupsRoutes, stubGroups)
 		if deps.OrgUnitsRoutes != nil {
 			r.Route("/orgunits", deps.OrgUnitsRoutes)
+		}
+		if deps.UsageRoutes != nil {
+			r.Route("/usage", deps.UsageRoutes)
 		}
 		mount(r, "/jobs", deps.JobsRoutes, stubJobs)
 		mount(r, "/audit", deps.AuditRoutes, stubAudit)

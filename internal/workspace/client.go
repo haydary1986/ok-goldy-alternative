@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"golang.org/x/time/rate"
 	admin "google.golang.org/api/admin/directory/v1"
+	reports "google.golang.org/api/admin/reports/v1"
 	"google.golang.org/api/option"
 )
 
@@ -37,13 +38,21 @@ var OrgUnitScopes = []string{
 	admin.AdminDirectoryOrgunitScope,
 }
 
+// UsageScopes is the read-only scope for the Admin Reports API (Drive
+// quota, Gmail activity, last-login). The Directory API never returns
+// these, so Goldy's usage domain consumes its own narrow-scoped client.
+var UsageScopes = []string{
+	"https://www.googleapis.com/auth/admin.reports.usage.readonly",
+}
+
 // AllRequiredScopes returns the full list of scopes the operator must
 // authorize in DWD if they want every Goldy feature to work. Used by the
 // Settings page and the per-scope diagnostic.
 func AllRequiredScopes() []string {
-	out := make([]string, 0, len(DefaultScopes)+len(OrgUnitScopes))
+	out := make([]string, 0, len(DefaultScopes)+len(OrgUnitScopes)+len(UsageScopes))
 	out = append(out, DefaultScopes...)
 	out = append(out, OrgUnitScopes...)
+	out = append(out, UsageScopes...)
 	return out
 }
 
@@ -66,8 +75,13 @@ type Config struct {
 }
 
 // Client wraps the Admin SDK Directory service with a token-bucket limiter.
+// It also lazily exposes the Reports API service for usage stats; callers
+// that need usage data should build a Variant() client scoped to
+// admin.reports.usage.readonly so token requests don't pull broader rights
+// than necessary.
 type Client struct {
 	dir        *admin.Service
+	reports    *reports.Service
 	limiter    *rate.Limiter
 	customerID string
 }
@@ -101,9 +115,14 @@ func New(ctx context.Context, c Config) (*Client, error) {
 	}
 	jwtCfg.Subject = c.DelegatedAdmin
 
-	dir, err := admin.NewService(ctx, option.WithHTTPClient(jwtCfg.Client(ctx)))
+	httpClient := jwtCfg.Client(ctx)
+	dir, err := admin.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("workspace: build admin service: %w", err)
+	}
+	rep, err := reports.NewService(ctx, option.WithHTTPClient(httpClient))
+	if err != nil {
+		return nil, fmt.Errorf("workspace: build reports service: %w", err)
 	}
 
 	rps := c.RateLimitRPS
@@ -117,6 +136,7 @@ func New(ctx context.Context, c Config) (*Client, error) {
 
 	return &Client{
 		dir:        dir,
+		reports:    rep,
 		limiter:    rate.NewLimiter(rate.Limit(rps), burst),
 		customerID: c.CustomerID,
 	}, nil
