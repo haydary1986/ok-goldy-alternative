@@ -1,3 +1,19 @@
+> [!IMPORTANT]
+> **This project is archived and no longer maintained.**
+>
+> The maintained replacement is **[Uruk Workspace](https://github.com/haydary1986/uruk-workspace)** —
+> a Google Sheets add-on that does the same job with no server to run, no Docker,
+> and no infrastructure to pay for. Each installation runs on its own Google Cloud
+> project, which solves the quota exhaustion that ended the original Ok Goldy.
+>
+> 👉 **[erticaz.com/uruk](https://erticaz.com/uruk/)**
+>
+> This repository stays public because the architecture here is still a reasonable
+> answer for organisations that specifically want a self-hosted service with async
+> workers and an audit log. It is not being developed further.
+
+---
+
 # Ok Goldy Alternative
 
 > A self-hosted, Go-native **alternative to [Ok Goldy](https://www.goldyarora.com/g-suite-addons/ok-goldy/)**, the popular but discontinued Google Sheets add-on for bulk Google Workspace administration.
